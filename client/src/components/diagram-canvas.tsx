@@ -2,9 +2,21 @@ import { useRef, useEffect, useState } from "react";
 import { Stage, Layer } from "react-konva";
 import BuildingBlock from "./building-block";
 import { ElectricalSymbols } from "./electrical-symbols";
+import DraggableComponent from "./draggable-component";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { Building } from "@shared/schema";
+
+interface DraggableItem {
+  id: string;
+  type: string;
+  symbol: string;
+  name: string;
+  label?: string;
+  x: number;
+  y: number;
+}
 
 interface DiagramCanvasProps {
   buildings: Building[];
@@ -17,7 +29,10 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [zoomLevel, setZoomLevel] = useState(100);
   const [gridEnabled, setGridEnabled] = useState(true);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
+  const [droppedComponents, setDroppedComponents] = useState<DraggableItem[]>([]);
   const stageRef = useRef<any>(null);
+  const { toast } = useToast();
 
   const handleZoomIn = () => {
     setZoomLevel(prev => Math.min(prev + 25, 400));
@@ -29,6 +44,67 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
   const handleFitToWindow = () => {
     setZoomLevel(100);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const data = JSON.parse(e.dataTransfer.getData('application/json'));
+    
+    if (data.type === 'component') {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / (zoomLevel / 100);
+      const y = (e.clientY - rect.top) / (zoomLevel / 100);
+      
+      const newComponent: DraggableItem = {
+        id: `component-${Date.now()}`,
+        type: data.componentId,
+        symbol: data.componentSymbol,
+        name: data.componentName,
+        label: data.componentName,
+        x: x - 25, // Center the component
+        y: y - 25
+      };
+      
+      setDroppedComponents(prev => [...prev, newComponent]);
+      toast({
+        title: "Componente agregado",
+        description: `${data.componentName} agregado al diagrama`,
+      });
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleComponentDragEnd = (id: string, x: number, y: number) => {
+    setDroppedComponents(prev => 
+      prev.map(comp => comp.id === id ? { ...comp, x, y } : comp)
+    );
+  };
+
+  const handleComponentDelete = (id: string) => {
+    setDroppedComponents(prev => prev.filter(comp => comp.id !== id));
+    setSelectedComponent(null);
+    toast({
+      title: "Componente eliminado",
+      description: "El componente ha sido eliminado del diagrama",
+    });
+  };
+
+  const handleComponentLabelUpdate = (id: string, label: string) => {
+    setDroppedComponents(prev => 
+      prev.map(comp => comp.id === id ? { ...comp, label } : comp)
+    );
+  };
+
+  const clearAllComponents = () => {
+    setDroppedComponents([]);
+    setSelectedComponent(null);
+    toast({
+      title: "Diagrama limpiado",
+      description: "Todos los componentes han sido eliminados",
+    });
   };
 
   return (
@@ -80,6 +156,16 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         </div>
         
         <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={clearAllComponents}
+            title="Limpiar Diagrama"
+            className="text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            Limpiar
+          </Button>
           <div className="flex items-center space-x-2 text-sm">
             <span className="text-gray-600">Grid:</span>
             <Button
@@ -106,7 +192,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       </div>
 
       {/* Main Diagram Canvas */}
-      <div className="flex-1 relative overflow-hidden">
+      <div 
+        className="flex-1 relative overflow-hidden"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
         {/* Grid Background */}
         {gridEnabled && (
           <div 
@@ -118,6 +208,21 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
           />
         )}
         
+        {/* Drop zone indicator */}
+        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+          <div className="flex items-center space-x-2">
+            <span>📋</span>
+            <span>Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+          </div>
+        </div>
+        
+        {/* Component count indicator */}
+        {droppedComponents.length > 0 && (
+          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700">
+            {droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama
+          </div>
+        )}
+        
         {/* Konva Stage for electrical diagram */}
         <Stage
           ref={stageRef}
@@ -126,6 +231,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
           scaleX={zoomLevel / 100}
           scaleY={zoomLevel / 100}
           draggable={tool === "move"}
+          onClick={() => setSelectedComponent(null)}
         >
           <Layer>
             {/* Main Electrical Feed Components */}
@@ -140,6 +246,25 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 y={building.positionY || 240}
                 onClick={() => onBuildingClick(building.id)}
                 isRealTimeActive={isRealTimeActive}
+              />
+            ))}
+            
+            {/* Draggable Components */}
+            {droppedComponents.map((component) => (
+              <DraggableComponent
+                key={component.id}
+                id={component.id}
+                type={component.type}
+                symbol={component.symbol}
+                name={component.name}
+                label={component.label}
+                x={component.x}
+                y={component.y}
+                isSelected={selectedComponent === component.id}
+                onSelect={() => setSelectedComponent(component.id)}
+                onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
+                onDelete={() => handleComponentDelete(component.id)}
+                onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
               />
             ))}
           </Layer>

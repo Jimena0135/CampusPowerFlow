@@ -55,11 +55,12 @@ export const alerts = pgTable("alerts", {
 
 export const electricalComponents = pgTable("electrical_components", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  type: text("type").notNull(), // 'transformer', 'breaker', 'motor', etc.
-  symbol: text("symbol").notNull(), // SVG or symbol reference
+  type: text("type").notNull(), // 'load', 'transformer', 'inverter', 'solar_panel', 'battery', 'biodigester', 'busbar'
+  symbol: text("symbol").notNull(), // Emoji or symbol reference
   name: text("name").notNull(),
+  label: text("label"), // Custom user label
   description: text("description"),
-  category: text("category").notNull(), // 'generation', 'distribution', 'measurement'
+  category: text("category").notNull(), // 'load', 'power_equipment', 'renewable', 'storage', 'distribution'
   positionX: real("position_x").notNull().default(0),
   positionY: real("position_y").notNull().default(0),
   buildingId: varchar("building_id").references(() => buildings.id),

@@ -55,11 +55,13 @@ The system uses a normalized relational schema with the following core entities:
 - **Connection Management**: Automatic reconnection handling for reliable real-time updates
 
 ### Component Architecture
-- **Electrical Diagram Canvas**: Interactive canvas for building and displaying electrical single-line diagrams
-- **Building Monitoring Blocks**: Modular components representing individual university buildings
-- **Dashboard System**: Comprehensive monitoring interfaces with real-time data visualization
-- **Component Library**: Standardized electrical symbols following NTC2050 standards
+- **Electrical Diagram Canvas**: Interactive drag-and-drop canvas for building custom electrical single-line diagrams
+- **Draggable Component System**: User-customizable electrical symbols with editable labels and positioning
+- **Building Monitoring Blocks**: Modular components representing individual university buildings with live data
+- **Dashboard System**: Comprehensive monitoring interfaces with real-time data visualization and charts
+- **Component Library**: NTC2050-compliant electrical symbols (Carga, Transformador, Inversor, Panel Solar, Batería, Biodigestor, Barras)
 - **System Status Panel**: Centralized monitoring of overall system health and alerts
+- **Custom Symbol Editor**: Ability to add custom labels to electrical components and drag them to build diagrams
 
 ## External Dependencies
 
