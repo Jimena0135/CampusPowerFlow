@@ -126,15 +126,14 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance > 0) {
-          // Calculate connection points at component edges
-          const componentRadius = 25;
-          const fromEdgeX = fromCenterX + (dx / distance) * componentRadius;
-          const fromEdgeY = fromCenterY + (dy / distance) * componentRadius;
-          const toEdgeX = toCenterX - (dx / distance) * componentRadius;
-          const toEdgeY = toCenterY - (dy / distance) * componentRadius;
+          // Use center points for cleaner connections
+          const fromConnectionX = fromCenterX;
+          const fromConnectionY = fromCenterY;
+          const toConnectionX = toCenterX;
+          const toConnectionY = toCenterY;
           
-          // Create 90-degree angle routing
-          const points = create90DegreeRoute(fromEdgeX, fromEdgeY, toEdgeX, toEdgeY);
+          // Create 90-degree angle routing from center to center
+          const points = create90DegreeRoute(fromConnectionX, fromConnectionY, toConnectionX, toConnectionY);
           
           return {
             ...connection,
@@ -226,8 +225,13 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   };
 
   const handleComponentDoubleClick = (componentId: string, componentType: string) => {
+    console.log('Double click detected:', componentId, componentType); // Debug log
     if (componentType === "carga") {
       setShowDashboard(componentId);
+      toast({
+        title: "Dashboard abierto",
+        description: `Mostrando dashboard para ${droppedComponents.find(c => c.id === componentId)?.label || "Carga"}`,
+      });
     }
   };
 
@@ -355,7 +359,12 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
           scaleX={zoomLevel / 100}
           scaleY={zoomLevel / 100}
           draggable={tool === "move"}
-          onClick={() => setSelectedComponent(null)}
+          onClick={(e) => {
+            // Only deselect if clicking on empty canvas
+            if (e.target === e.target.getStage()) {
+              setSelectedComponent(null);
+            }
+          }}
         >
           <Layer>
             {/* Connections */}

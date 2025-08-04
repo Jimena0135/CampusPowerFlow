@@ -58,23 +58,29 @@ export default function DraggableComponent({
         draggable={true}
         onDragEnd={handleDragEnd}
         onClick={(e) => {
+          e.evt.stopPropagation();
           onSelect();
           if (onClick) {
             onClick();
           }
         }}
         onDblClick={(e) => {
+          e.evt.stopPropagation();
+          console.log('Component double clicked:', type, id); // Debug log
           if (type === "carga" && onDoubleClick) {
             onDoubleClick();
           }
         }}
         onTap={(e) => {
+          e.evt.stopPropagation();
           onSelect();
           if (onClick) {
             onClick();
           }
         }}
         onDblTap={(e) => {
+          e.evt.stopPropagation();
+          console.log('Component double tapped:', type, id); // Debug log
           if (type === "carga" && onDoubleClick) {
             onDoubleClick();
           }
@@ -91,6 +97,15 @@ export default function DraggableComponent({
           fill="#374151"
           align="center"
           fontWeight="bold"
+        />
+        
+        {/* Connection point indicator (small circle at center) */}
+        <Circle
+          x={0}
+          y={0}
+          radius={2}
+          fill="#2563eb"
+          opacity={0.6}
         />
         
         {/* Component label */}
