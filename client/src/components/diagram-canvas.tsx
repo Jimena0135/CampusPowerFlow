@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from "react";
-import { Stage, Layer, Line } from "react-konva";
+import { Stage, Layer, Line, Transformer } from "react-konva";
 import BuildingBlock from "./building-block";
 import { ElectricalSymbols } from "./electrical-symbols";
 import DraggableComponent from "./draggable-component";
+import ResizableBarra from "./resizable-barra";
 import CargaDashboard from "./carga-dashboard";
 import { Button } from "@/components/ui/button";
 import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X } from "lucide-react";
@@ -17,6 +18,8 @@ interface DraggableItem {
   label?: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
 }
 
 interface Connection {
@@ -73,7 +76,9 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         name: data.componentName,
         label: data.componentName,
         x: x - 25, // Center the component
-        y: y - 25
+        y: y - 25,
+        width: data.componentId === "barras" ? 80 : undefined,
+        height: data.componentId === "barras" ? 20 : undefined
       };
       
       setDroppedComponents(prev => [...prev, newComponent]);
@@ -89,10 +94,59 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   };
 
   const handleComponentDragEnd = (id: string, x: number, y: number) => {
-    setDroppedComponents(prev => 
-      prev.map(comp => comp.id === id ? { ...comp, x, y } : comp)
-    );
+    setDroppedComponents(prev => {
+      const updated = prev.map(comp => comp.id === id ? { ...comp, x, y } : comp);
+      setTimeout(() => updateConnectionsForComponents(updated), 100);
+      return updated;
+    });
   };
+
+  const updateConnectionsForComponents = (components: DraggableItem[]) => {
+    setConnections(prev => prev.map(connection => {
+      const fromComponent = components.find(c => c.id === connection.from);
+      const toComponent = components.find(c => c.id === connection.to);
+      
+      if (fromComponent && toComponent) {
+        const fromCenterX = fromComponent.x + (fromComponent.width ? fromComponent.width / 2 : 25);
+        const fromCenterY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 25);
+        const toCenterX = toComponent.x + (toComponent.width ? toComponent.width / 2 : 25);
+        const toCenterY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 25);
+        
+        // Create a more flexible curved line that starts from component edge
+        const dx = toCenterX - fromCenterX;
+        const dy = toCenterY - fromCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0) {
+          // Calculate connection points at component edges
+          const fromEdgeX = fromCenterX + (dx / distance) * (fromComponent.width ? fromComponent.width / 2 : 25);
+          const fromEdgeY = fromCenterY + (dy / distance) * (fromComponent.height ? fromComponent.height / 2 : 25);
+          const toEdgeX = toCenterX - (dx / distance) * (toComponent.width ? toComponent.width / 2 : 25);
+          const toEdgeY = toCenterY - (dy / distance) * (toComponent.height ? toComponent.height / 2 : 25);
+          
+          // Create curved connection with control points
+          const midX = (fromEdgeX + toEdgeX) / 2;
+          const midY = (fromEdgeY + toEdgeY) / 2;
+          const offsetX = Math.abs(dy) * 0.3;
+          const offsetY = Math.abs(dx) * 0.3;
+          
+          return {
+            ...connection,
+            points: [
+              fromEdgeX, fromEdgeY,
+              fromEdgeX + offsetX, fromEdgeY,
+              midX, midY - offsetY,
+              toEdgeX - offsetX, toEdgeY,
+              toEdgeX, toEdgeY
+            ]
+          };
+        }
+      }
+      return connection;
+    }));
+  };
+
+
 
   const handleComponentDelete = (id: string) => {
     setDroppedComponents(prev => prev.filter(comp => comp.id !== id));
@@ -106,6 +160,12 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const handleComponentLabelUpdate = (id: string, label: string) => {
     setDroppedComponents(prev => 
       prev.map(comp => comp.id === id ? { ...comp, label } : comp)
+    );
+  };
+
+  const handleComponentResize = (id: string, width: number, height: number) => {
+    setDroppedComponents(prev => 
+      prev.map(comp => comp.id === id ? { ...comp, width, height } : comp)
     );
   };
 
@@ -151,6 +211,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
             title: "Conexión creada",
             description: `Conectado ${fromComponent.label} con ${toComponent.label}`,
           });
+          setTimeout(() => updateConnectionsForComponents(droppedComponents), 100);
         }
       }
     } else if (componentType === "carga") {
@@ -294,30 +355,54 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 strokeWidth={2}
                 lineCap="round"
                 lineJoin="round"
+                tension={0.5}
               />
             ))}
             
             {/* Draggable Components */}
             {droppedComponents.map((component) => (
-              <DraggableComponent
-                key={component.id}
-                id={component.id}
-                type={component.type}
-                symbol={component.symbol}
-                name={component.name}
-                label={component.label}
-                x={component.x}
-                y={component.y}
-                isSelected={selectedComponent === component.id || connectingFrom === component.id}
-                onSelect={() => {
-                  setSelectedComponent(component.id);
-                  handleComponentClick(component.id, component.type);
-                }}
-                onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
-                onDelete={() => handleComponentDelete(component.id)}
-                onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
-                onClick={() => handleComponentClick(component.id, component.type)}
-              />
+              component.type === "barras" ? (
+                <ResizableBarra
+                  key={component.id}
+                  id={component.id}
+                  symbol={component.symbol}
+                  name={component.name}
+                  label={component.label}
+                  x={component.x}
+                  y={component.y}
+                  width={component.width || 80}
+                  height={component.height || 20}
+                  isSelected={selectedComponent === component.id || connectingFrom === component.id}
+                  onSelect={() => {
+                    setSelectedComponent(component.id);
+                    handleComponentClick(component.id, component.type);
+                  }}
+                  onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
+                  onResize={(width, height) => handleComponentResize(component.id, width, height)}
+                  onDelete={() => handleComponentDelete(component.id)}
+                  onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
+                />
+              ) : (
+                <DraggableComponent
+                  key={component.id}
+                  id={component.id}
+                  type={component.type}
+                  symbol={component.symbol}
+                  name={component.name}
+                  label={component.label}
+                  x={component.x}
+                  y={component.y}
+                  isSelected={selectedComponent === component.id || connectingFrom === component.id}
+                  onSelect={() => {
+                    setSelectedComponent(component.id);
+                    handleComponentClick(component.id, component.type);
+                  }}
+                  onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
+                  onDelete={() => handleComponentDelete(component.id)}
+                  onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
+                  onClick={() => handleComponentClick(component.id, component.type)}
+                />
+              )
             ))}
           </Layer>
         </Stage>
