@@ -1,10 +1,11 @@
 import { useRef, useEffect, useState } from "react";
-import { Stage, Layer } from "react-konva";
+import { Stage, Layer, Line } from "react-konva";
 import BuildingBlock from "./building-block";
 import { ElectricalSymbols } from "./electrical-symbols";
 import DraggableComponent from "./draggable-component";
+import CargaDashboard from "./carga-dashboard";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2 } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Building } from "@shared/schema";
 
@@ -16,6 +17,13 @@ interface DraggableItem {
   label?: string;
   x: number;
   y: number;
+}
+
+interface Connection {
+  id: string;
+  from: string;
+  to: string;
+  points: number[];
 }
 
 interface DiagramCanvasProps {
@@ -31,6 +39,9 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [droppedComponents, setDroppedComponents] = useState<DraggableItem[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [showDashboard, setShowDashboard] = useState<string | null>(null);
   const stageRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -100,11 +111,51 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
   const clearAllComponents = () => {
     setDroppedComponents([]);
+    setConnections([]);
     setSelectedComponent(null);
+    setConnectingFrom(null);
+    setShowDashboard(null);
     toast({
       title: "Diagrama limpiado",
       description: "Todos los componentes han sido eliminados",
     });
+  };
+
+  const handleComponentClick = (componentId: string, componentType: string) => {
+    if (tool === "connect") {
+      if (connectingFrom === null) {
+        setConnectingFrom(componentId);
+        toast({
+          title: "Modo conexión",
+          description: "Selecciona el componente de destino para crear la conexión",
+        });
+      } else if (connectingFrom !== componentId) {
+        // Create connection
+        const fromComponent = droppedComponents.find(c => c.id === connectingFrom);
+        const toComponent = droppedComponents.find(c => c.id === componentId);
+        
+        if (fromComponent && toComponent) {
+          const newConnection: Connection = {
+            id: `connection-${Date.now()}`,
+            from: connectingFrom,
+            to: componentId,
+            points: [
+              fromComponent.x + 25, fromComponent.y + 25,
+              toComponent.x + 25, toComponent.y + 25
+            ]
+          };
+          
+          setConnections(prev => [...prev, newConnection]);
+          setConnectingFrom(null);
+          toast({
+            title: "Conexión creada",
+            description: `Conectado ${fromComponent.label} con ${toComponent.label}`,
+          });
+        }
+      }
+    } else if (componentType === "carga") {
+      setShowDashboard(componentId);
+    }
   };
 
   return (
@@ -234,18 +285,15 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
           onClick={() => setSelectedComponent(null)}
         >
           <Layer>
-            {/* Main Electrical Feed Components */}
-            <ElectricalSymbols x={80} y={80} />
-            
-            {/* Building Blocks */}
-            {buildings.map((building, index) => (
-              <BuildingBlock
-                key={building.id}
-                building={building}
-                x={building.positionX || 240 + (index * 320)}
-                y={building.positionY || 240}
-                onClick={() => onBuildingClick(building.id)}
-                isRealTimeActive={isRealTimeActive}
+            {/* Connections */}
+            {connections.map((connection) => (
+              <Line
+                key={connection.id}
+                points={connection.points}
+                stroke="#374151"
+                strokeWidth={2}
+                lineCap="round"
+                lineJoin="round"
               />
             ))}
             
@@ -260,16 +308,39 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 label={component.label}
                 x={component.x}
                 y={component.y}
-                isSelected={selectedComponent === component.id}
-                onSelect={() => setSelectedComponent(component.id)}
+                isSelected={selectedComponent === component.id || connectingFrom === component.id}
+                onSelect={() => {
+                  setSelectedComponent(component.id);
+                  handleComponentClick(component.id, component.type);
+                }}
                 onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
                 onDelete={() => handleComponentDelete(component.id)}
                 onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
+                onClick={() => handleComponentClick(component.id, component.type)}
               />
             ))}
           </Layer>
         </Stage>
       </div>
+      
+      {/* Dashboard Modal */}
+      {showDashboard && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-[800px] h-[600px] relative">
+            <button
+              onClick={() => setShowDashboard(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <CargaDashboard 
+              cargaId={showDashboard}
+              cargaName={droppedComponents.find(c => c.id === showDashboard)?.label || "Carga"}
+              onClose={() => setShowDashboard(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

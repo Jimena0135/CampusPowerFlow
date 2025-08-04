@@ -17,6 +17,7 @@ interface DraggableComponentProps {
   onDragEnd: (x: number, y: number) => void;
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
+  onClick?: () => void;
 }
 
 export default function DraggableComponent({
@@ -31,7 +32,8 @@ export default function DraggableComponent({
   onSelect,
   onDragEnd,
   onDelete,
-  onLabelUpdate
+  onLabelUpdate,
+  onClick
 }: DraggableComponentProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempLabel, setTempLabel] = useState(label || name);
@@ -63,8 +65,18 @@ export default function DraggableComponent({
         y={y}
         draggable={true}
         onDragEnd={handleDragEnd}
-        onClick={onSelect}
-        onTap={onSelect}
+        onClick={(e) => {
+          onSelect();
+          if (type === "carga" && onClick) {
+            onClick();
+          }
+        }}
+        onTap={(e) => {
+          onSelect();
+          if (type === "carga" && onClick) {
+            onClick();
+          }
+        }}
       >
         {/* Background circle/rectangle for component */}
         <Circle
@@ -102,34 +114,50 @@ export default function DraggableComponent({
             <Circle
               x={25}
               y={-25}
-              radius={8}
+              radius={10}
               fill="#ef4444"
-              onClick={onDelete}
+              stroke="#ffffff"
+              strokeWidth={2}
+              onClick={(e) => {
+                e.evt.stopPropagation();
+                onDelete();
+              }}
             />
             <Text
-              x={21}
-              y={-29}
+              x={19}
+              y={-31}
               text="×"
-              fontSize={12}
+              fontSize={16}
               fill="white"
-              onClick={onDelete}
+              onClick={(e) => {
+                e.evt.stopPropagation();
+                onDelete();
+              }}
             />
             
             {/* Edit button */}
             <Circle
               x={25}
-              y={0}
-              radius={8}
+              y={5}
+              radius={10}
               fill="#3b82f6"
-              onClick={handleLabelEdit}
+              stroke="#ffffff"
+              strokeWidth={2}
+              onClick={(e) => {
+                e.evt.stopPropagation();
+                handleLabelEdit();
+              }}
             />
             <Text
-              x={21}
-              y={-4}
+              x={19}
+              y={-1}
               text="✎"
-              fontSize={10}
+              fontSize={12}
               fill="white"
-              onClick={handleLabelEdit}
+              onClick={(e) => {
+                e.evt.stopPropagation();
+                handleLabelEdit();
+              }}
             />
           </>
         )}
