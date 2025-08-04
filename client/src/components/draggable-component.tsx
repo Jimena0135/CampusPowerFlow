@@ -67,7 +67,7 @@ export default function DraggableComponent({
         onDblClick={(e) => {
           e.evt.stopPropagation();
           console.log('Component double clicked:', type, id); // Debug log
-          if (type === "carga" && onDoubleClick) {
+          if ((type === "carga" || type === "load") && onDoubleClick) {
             onDoubleClick();
           }
         }}
@@ -81,7 +81,7 @@ export default function DraggableComponent({
         onDblTap={(e) => {
           e.evt.stopPropagation();
           console.log('Component double tapped:', type, id); // Debug log
-          if (type === "carga" && onDoubleClick) {
+          if ((type === "carga" || type === "load") && onDoubleClick) {
             onDoubleClick();
           }
         }}

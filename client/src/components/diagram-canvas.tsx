@@ -226,7 +226,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
   const handleComponentDoubleClick = (componentId: string, componentType: string) => {
     console.log('Double click detected:', componentId, componentType); // Debug log
-    if (componentType === "carga") {
+    if (componentType === "carga" || componentType === "load") {
       setShowDashboard(componentId);
       toast({
         title: "Dashboard abierto",
