@@ -18,6 +18,7 @@ interface DraggableComponentProps {
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
   onClick?: () => void;
+  onDoubleClick?: () => void;
 }
 
 export default function DraggableComponent({
@@ -33,7 +34,8 @@ export default function DraggableComponent({
   onDragEnd,
   onDelete,
   onLabelUpdate,
-  onClick
+  onClick,
+  onDoubleClick
 }: DraggableComponentProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempLabel, setTempLabel] = useState(label || name);
@@ -67,14 +69,24 @@ export default function DraggableComponent({
         onDragEnd={handleDragEnd}
         onClick={(e) => {
           onSelect();
-          if (type === "carga" && onClick) {
+          if (onClick) {
             onClick();
+          }
+        }}
+        onDblClick={(e) => {
+          if (type === "carga" && onDoubleClick) {
+            onDoubleClick();
           }
         }}
         onTap={(e) => {
           onSelect();
-          if (type === "carga" && onClick) {
+          if (onClick) {
             onClick();
+          }
+        }}
+        onDblTap={(e) => {
+          if (type === "carga" && onDoubleClick) {
+            onDoubleClick();
           }
         }}
       >

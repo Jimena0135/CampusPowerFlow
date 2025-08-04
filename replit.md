@@ -56,7 +56,11 @@ The system uses a normalized relational schema with the following core entities:
 
 ### Component Architecture
 - **Electrical Diagram Canvas**: Interactive drag-and-drop canvas for building custom electrical single-line diagrams
+- **90-Degree Connection System**: Smart routing system that creates straight lines with 90-degree angles between components for professional electrical diagrams
 - **Draggable Component System**: User-customizable electrical symbols with editable labels and positioning
+- **Double-Click Load Dashboard**: Interactive load components that open comprehensive electrical monitoring dashboards on double-click
+- **Real-time Charts**: Live electrical parameter visualization with historical data trending (voltage, current, power, power factor, frequency, THD)
+- **Resizable Busbar System**: Professional electrical busbars with horizontal resizing capability and proper electrical connection points
 - **Building Monitoring Blocks**: Modular components representing individual university buildings with live data
 - **Dashboard System**: Comprehensive monitoring interfaces with real-time data visualization and charts
 - **Component Library**: NTC2050-compliant electrical symbols (Carga, Transformador, Inversor, Panel Solar, Batería, Biodigestor, Barras)

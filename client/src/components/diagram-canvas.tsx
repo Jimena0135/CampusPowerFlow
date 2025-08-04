@@ -27,6 +27,7 @@ interface Connection {
   from: string;
   to: string;
   points: number[];
+  waypoints?: { x: number; y: number }[]; // For 90-degree routing
 }
 
 interface DiagramCanvasProps {
@@ -101,6 +102,12 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     });
   };
 
+  const create90DegreeRoute = (fromX: number, fromY: number, toX: number, toY: number) => {
+    // Create 90-degree angle routing
+    const midX = fromX + (toX - fromX) * 0.5;
+    return [fromX, fromY, midX, fromY, midX, toY, toX, toY];
+  };
+
   const updateConnectionsForComponents = (components: DraggableItem[]) => {
     setConnections(prev => prev.map(connection => {
       const fromComponent = components.find(c => c.id === connection.from);
@@ -112,33 +119,25 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         const toCenterX = toComponent.x + (toComponent.width ? toComponent.width / 2 : 25);
         const toCenterY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 25);
         
-        // Create a more flexible curved line that starts from component edge
+        // Calculate connection points at component edges for straight lines
         const dx = toCenterX - fromCenterX;
         const dy = toCenterY - fromCenterY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance > 0) {
           // Calculate connection points at component edges
-          const fromEdgeX = fromCenterX + (dx / distance) * (fromComponent.width ? fromComponent.width / 2 : 25);
-          const fromEdgeY = fromCenterY + (dy / distance) * (fromComponent.height ? fromComponent.height / 2 : 25);
-          const toEdgeX = toCenterX - (dx / distance) * (toComponent.width ? toComponent.width / 2 : 25);
-          const toEdgeY = toCenterY - (dy / distance) * (toComponent.height ? toComponent.height / 2 : 25);
+          const componentRadius = 25;
+          const fromEdgeX = fromCenterX + (dx / distance) * componentRadius;
+          const fromEdgeY = fromCenterY + (dy / distance) * componentRadius;
+          const toEdgeX = toCenterX - (dx / distance) * componentRadius;
+          const toEdgeY = toCenterY - (dy / distance) * componentRadius;
           
-          // Create curved connection with control points
-          const midX = (fromEdgeX + toEdgeX) / 2;
-          const midY = (fromEdgeY + toEdgeY) / 2;
-          const offsetX = Math.abs(dy) * 0.3;
-          const offsetY = Math.abs(dx) * 0.3;
+          // Create 90-degree angle routing
+          const points = create90DegreeRoute(fromEdgeX, fromEdgeY, toEdgeX, toEdgeY);
           
           return {
             ...connection,
-            points: [
-              fromEdgeX, fromEdgeY,
-              fromEdgeX + offsetX, fromEdgeY,
-              midX, midY - offsetY,
-              toEdgeX - offsetX, toEdgeY,
-              toEdgeX, toEdgeY
-            ]
+            points
           };
         }
       }
@@ -215,6 +214,13 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         }
       }
     } else if (componentType === "carga") {
+      // Single click selection for loads
+      setSelectedComponent(componentId);
+    }
+  };
+
+  const handleComponentDoubleClick = (componentId: string, componentType: string) => {
+    if (componentType === "carga") {
       setShowDashboard(componentId);
     }
   };
@@ -401,6 +407,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   onDelete={() => handleComponentDelete(component.id)}
                   onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
                   onClick={() => handleComponentClick(component.id, component.type)}
+                  onDoubleClick={() => handleComponentDoubleClick(component.id, component.type)}
                 />
               )
             ))}

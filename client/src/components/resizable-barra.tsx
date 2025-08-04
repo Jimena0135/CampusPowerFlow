@@ -90,13 +90,32 @@ export default function ResizableBarra({
         onTap={onSelect}
         onTransformEnd={handleTransformEnd}
       >
-        {/* Barra rectangle */}
+        {/* Barra rectangle with electrical busbar styling */}
         <Rect
           width={width}
           height={height}
-          fill="#8B4513"
-          stroke={isSelected ? "#2563eb" : "#654321"}
-          strokeWidth={2}
+          fill="#C0C0C0" // Metallic silver color for electrical busbar
+          stroke={isSelected ? "#2563eb" : "#808080"}
+          strokeWidth={isSelected ? 3 : 2}
+          rx={2} // Slight rounding for modern electrical busbar look
+        />
+        
+        {/* Electrical connection points */}
+        <Circle
+          x={5}
+          y={height / 2}
+          radius={3}
+          fill="#FFD700"
+          stroke="#B8860B"
+          strokeWidth={1}
+        />
+        <Circle
+          x={width - 5}
+          y={height / 2}
+          radius={3}
+          fill="#FFD700"
+          stroke="#B8860B"
+          strokeWidth={1}
         />
         
         {/* Component label */}
@@ -170,17 +189,18 @@ export default function ResizableBarra({
       {isSelected && (
         <Transformer
           ref={transformerRef}
-          node={groupRef.current}
           keepRatio={false}
-          enabledAnchors={['middle-left', 'middle-right', 'top-center', 'bottom-center']}
+          enabledAnchors={['middle-left', 'middle-right']} // Only horizontal resizing for electrical busbars
           boundBoxFunc={(oldBox, newBox) => {
-            // Minimum size constraints
-            if (newBox.width < 20) {
-              newBox.width = 20;
+            // Minimum and maximum size constraints for electrical busbars
+            if (newBox.width < 40) {
+              newBox.width = 40; // Minimum busbar length
             }
-            if (newBox.height < 10) {
-              newBox.height = 10;
+            if (newBox.width > 400) {
+              newBox.width = 400; // Maximum busbar length
             }
+            // Keep height consistent for busbars
+            newBox.height = oldBox.height;
             return newBox;
           }}
         />
