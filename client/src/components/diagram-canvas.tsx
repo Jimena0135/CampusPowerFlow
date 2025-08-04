@@ -46,6 +46,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState<string | null>(null);
+  const [editingComponent, setEditingComponent] = useState<{ id: string; label: string } | null>(null);
   const stageRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -103,7 +104,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   };
 
   const create90DegreeRoute = (fromX: number, fromY: number, toX: number, toY: number) => {
-    // Create 90-degree angle routing
+    // Create completely straight lines with 90-degree angles
     const midX = fromX + (toX - fromX) * 0.5;
     return [fromX, fromY, midX, fromY, midX, toY, toX, toY];
   };
@@ -160,6 +161,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     setDroppedComponents(prev => 
       prev.map(comp => comp.id === id ? { ...comp, label } : comp)
     );
+    setEditingComponent(null);
+  };
+
+  const handleStartEditingLabel = (id: string, currentLabel: string) => {
+    setEditingComponent({ id, label: currentLabel });
   };
 
   const handleComponentResize = (id: string, width: number, height: number) => {
@@ -359,9 +365,9 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 points={connection.points}
                 stroke="#374151"
                 strokeWidth={2}
-                lineCap="round"
-                lineJoin="round"
-                tension={0.5}
+                lineCap="square"
+                lineJoin="miter"
+                tension={0}
               />
             ))}
             
@@ -387,6 +393,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   onResize={(width, height) => handleComponentResize(component.id, width, height)}
                   onDelete={() => handleComponentDelete(component.id)}
                   onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
+                  onStartEditing={(label) => handleStartEditingLabel(component.id, label)}
                 />
               ) : (
                 <DraggableComponent
@@ -406,6 +413,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
                   onDelete={() => handleComponentDelete(component.id)}
                   onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
+                  onStartEditing={(label) => handleStartEditingLabel(component.id, label)}
                   onClick={() => handleComponentClick(component.id, component.type)}
                   onDoubleClick={() => handleComponentDoubleClick(component.id, component.type)}
                 />
@@ -418,10 +426,10 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       {/* Dashboard Modal */}
       {showDashboard && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-[800px] h-[600px] relative">
+          <div className="bg-white rounded-lg p-6 w-[900px] h-[700px] relative overflow-y-auto">
             <button
               onClick={() => setShowDashboard(null)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
             >
               <X className="w-6 h-6" />
             </button>
@@ -430,6 +438,43 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               cargaName={droppedComponents.find(c => c.id === showDashboard)?.label || "Carga"}
               onClose={() => setShowDashboard(null)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Label Editing Modal */}
+      {editingComponent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-80">
+            <h3 className="text-lg font-semibold mb-4">Editar Etiqueta</h3>
+            <input
+              value={editingComponent.label}
+              onChange={(e) => setEditingComponent({ ...editingComponent, label: e.target.value })}
+              placeholder="Ingrese la etiqueta del componente"
+              className="w-full p-2 border border-gray-300 rounded mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleComponentLabelUpdate(editingComponent.id, editingComponent.label);
+                } else if (e.key === 'Escape') {
+                  setEditingComponent(null);
+                }
+              }}
+            />
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => handleComponentLabelUpdate(editingComponent.id, editingComponent.label)} 
+                className="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+              >
+                Guardar
+              </button>
+              <button 
+                onClick={() => setEditingComponent(null)} 
+                className="flex-1 bg-gray-300 text-gray-700 p-2 rounded hover:bg-gray-400"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

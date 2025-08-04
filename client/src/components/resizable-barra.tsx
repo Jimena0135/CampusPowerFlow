@@ -16,6 +16,7 @@ interface ResizableBarraProps {
   onResize: (width: number, height: number) => void;
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
+  onStartEditing: (label: string) => void;
 }
 
 export default function ResizableBarra({
@@ -32,10 +33,9 @@ export default function ResizableBarra({
   onDragEnd,
   onResize,
   onDelete,
-  onLabelUpdate
+  onLabelUpdate,
+  onStartEditing
 }: ResizableBarraProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [tempLabel, setTempLabel] = useState(label || name);
   const groupRef = useRef<any>(null);
   const transformerRef = useRef<any>(null);
 
@@ -65,17 +65,7 @@ export default function ResizableBarra({
   };
 
   const handleLabelEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleLabelSave = () => {
-    onLabelUpdate(tempLabel);
-    setIsEditing(false);
-  };
-
-  const handleLabelCancel = () => {
-    setTempLabel(label || name);
-    setIsEditing(false);
+    onStartEditing(label || name);
   };
 
   return (
@@ -206,29 +196,7 @@ export default function ResizableBarra({
         />
       )}
       
-      {/* Label editing modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-80">
-            <h3 className="text-lg font-semibold mb-4">Editar Etiqueta</h3>
-            <input
-              value={tempLabel}
-              onChange={(e) => setTempLabel(e.target.value)}
-              placeholder="Ingrese la etiqueta del componente"
-              className="w-full p-2 border border-gray-300 rounded mb-4"
-              autoFocus
-            />
-            <div className="flex space-x-2">
-              <button onClick={handleLabelSave} className="flex-1 bg-blue-600 text-white p-2 rounded">
-                Guardar
-              </button>
-              <button onClick={handleLabelCancel} className="flex-1 bg-gray-300 text-gray-700 p-2 rounded">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }

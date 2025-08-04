@@ -17,6 +17,7 @@ interface DraggableComponentProps {
   onDragEnd: (x: number, y: number) => void;
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
+  onStartEditing: (label: string) => void;
   onClick?: () => void;
   onDoubleClick?: () => void;
 }
@@ -34,11 +35,10 @@ export default function DraggableComponent({
   onDragEnd,
   onDelete,
   onLabelUpdate,
+  onStartEditing,
   onClick,
   onDoubleClick
 }: DraggableComponentProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [tempLabel, setTempLabel] = useState(label || name);
   const groupRef = useRef<any>(null);
 
   const handleDragEnd = (e: any) => {
@@ -46,17 +46,7 @@ export default function DraggableComponent({
   };
 
   const handleLabelEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleLabelSave = () => {
-    onLabelUpdate(tempLabel);
-    setIsEditing(false);
-  };
-
-  const handleLabelCancel = () => {
-    setTempLabel(label || name);
-    setIsEditing(false);
+    onStartEditing(label || name);
   };
 
   return (
@@ -170,29 +160,7 @@ export default function DraggableComponent({
         )}
       </Group>
       
-      {/* Label editing modal */}
-      {isEditing && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-80">
-            <h3 className="text-lg font-semibold mb-4">Editar Etiqueta</h3>
-            <Input
-              value={tempLabel}
-              onChange={(e) => setTempLabel(e.target.value)}
-              placeholder="Ingrese la etiqueta del componente"
-              className="mb-4"
-              autoFocus
-            />
-            <div className="flex space-x-2">
-              <Button onClick={handleLabelSave} className="flex-1">
-                Guardar
-              </Button>
-              <Button onClick={handleLabelCancel} variant="outline" className="flex-1">
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }
