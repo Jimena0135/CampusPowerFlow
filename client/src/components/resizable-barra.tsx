@@ -11,6 +11,7 @@ interface ResizableBarraProps {
   width: number;
   height: number;
   isSelected: boolean;
+  isLocked?: boolean;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   onResize: (width: number, height: number) => void;
@@ -29,6 +30,7 @@ export default function ResizableBarra({
   width,
   height,
   isSelected,
+  isLocked = false,
   onSelect,
   onDragEnd,
   onResize,
@@ -74,7 +76,7 @@ export default function ResizableBarra({
         ref={groupRef}
         x={x}
         y={y}
-        draggable={true}
+        draggable={!isLocked}
         onDragEnd={handleDragEnd}
         onClick={onSelect}
         onTap={onSelect}

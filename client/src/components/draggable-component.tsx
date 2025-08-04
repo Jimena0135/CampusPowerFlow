@@ -13,6 +13,7 @@ interface DraggableComponentProps {
   x: number;
   y: number;
   isSelected: boolean;
+  isLocked?: boolean;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   onDelete: () => void;
@@ -31,6 +32,7 @@ export default function DraggableComponent({
   x,
   y,
   isSelected,
+  isLocked = false,
   onSelect,
   onDragEnd,
   onDelete,
@@ -55,7 +57,7 @@ export default function DraggableComponent({
         ref={groupRef}
         x={x}
         y={y}
-        draggable={true}
+        draggable={!isLocked}
         onDragEnd={handleDragEnd}
         onClick={(e) => {
           e.evt.stopPropagation();

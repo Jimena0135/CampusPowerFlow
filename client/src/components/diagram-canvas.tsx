@@ -6,7 +6,7 @@ import DraggableComponent from "./draggable-component";
 import ResizableBarra from "./resizable-barra";
 import CargaDashboard from "./carga-dashboard";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Building } from "@shared/schema";
 
@@ -37,10 +37,11 @@ interface DiagramCanvasProps {
 }
 
 export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeActive }: DiagramCanvasProps) {
-  const [tool, setTool] = useState<"select" | "move" | "connect">("select");
+  const [tool, setTool] = useState<"select" | "move" | "connect" | "edit" | "lock">("select");
   const [zoomLevel, setZoomLevel] = useState(100);
   const [gridEnabled, setGridEnabled] = useState(true);
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [droppedComponents, setDroppedComponents] = useState<DraggableItem[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -246,6 +247,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               size="sm"
               onClick={() => setTool("select")}
               title="Seleccionar"
+              disabled={isLocked}
             >
               <MousePointer className="w-4 h-4" />
             </Button>
@@ -254,6 +256,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               size="sm"
               onClick={() => setTool("move")}
               title="Mover"
+              disabled={isLocked}
             >
               <Move className="w-4 h-4" />
             </Button>
@@ -262,8 +265,44 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               size="sm"
               onClick={() => setTool("connect")}
               title="Conectar"
+              disabled={isLocked}
             >
               <Link className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={tool === "edit" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setTool("edit");
+                setIsLocked(false);
+              }}
+              title="Modo Edición"
+            >
+              <Edit3 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={isLocked ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setIsLocked(!isLocked);
+                if (!isLocked) {
+                  setTool("lock");
+                  setSelectedComponent(null);
+                  toast({
+                    title: "Diagrama bloqueado",
+                    description: "Los componentes no se pueden mover ni editar",
+                  });
+                } else {
+                  setTool("select");
+                  toast({
+                    title: "Diagrama desbloqueado",
+                    description: "Los componentes se pueden mover y editar normalmente",
+                  });
+                }
+              }}
+              title={isLocked ? "Desbloquear" : "Bloquear"}
+            >
+              <Lock className="w-4 h-4" />
             </Button>
           </div>
           
@@ -393,16 +432,39 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   y={component.y}
                   width={component.width || 80}
                   height={component.height || 20}
-                  isSelected={selectedComponent === component.id || connectingFrom === component.id}
+                  isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
                   onSelect={() => {
-                    setSelectedComponent(component.id);
-                    handleComponentClick(component.id, component.type);
+                    if (!isLocked) {
+                      setSelectedComponent(component.id);
+                      handleComponentClick(component.id, component.type);
+                    }
                   }}
-                  onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
-                  onResize={(width, height) => handleComponentResize(component.id, width, height)}
-                  onDelete={() => handleComponentDelete(component.id)}
-                  onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
-                  onStartEditing={(label) => handleStartEditingLabel(component.id, label)}
+                  onDragEnd={(x, y) => {
+                    if (!isLocked) {
+                      handleComponentDragEnd(component.id, x, y);
+                    }
+                  }}
+                  onResize={(width, height) => {
+                    if (!isLocked) {
+                      handleComponentResize(component.id, width, height);
+                    }
+                  }}
+                  onDelete={() => {
+                    if (!isLocked) {
+                      handleComponentDelete(component.id);
+                    }
+                  }}
+                  onLabelUpdate={(label) => {
+                    if (!isLocked) {
+                      handleComponentLabelUpdate(component.id, label);
+                    }
+                  }}
+                  onStartEditing={(label) => {
+                    if (!isLocked) {
+                      handleStartEditingLabel(component.id, label);
+                    }
+                  }}
+                  isLocked={isLocked}
                 />
               ) : (
                 <DraggableComponent
@@ -414,17 +476,40 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   label={component.label}
                   x={component.x}
                   y={component.y}
-                  isSelected={selectedComponent === component.id || connectingFrom === component.id}
+                  isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
                   onSelect={() => {
-                    setSelectedComponent(component.id);
-                    handleComponentClick(component.id, component.type);
+                    if (!isLocked) {
+                      setSelectedComponent(component.id);
+                      handleComponentClick(component.id, component.type);
+                    }
                   }}
-                  onDragEnd={(x, y) => handleComponentDragEnd(component.id, x, y)}
-                  onDelete={() => handleComponentDelete(component.id)}
-                  onLabelUpdate={(label) => handleComponentLabelUpdate(component.id, label)}
-                  onStartEditing={(label) => handleStartEditingLabel(component.id, label)}
-                  onClick={() => handleComponentClick(component.id, component.type)}
+                  onDragEnd={(x, y) => {
+                    if (!isLocked) {
+                      handleComponentDragEnd(component.id, x, y);
+                    }
+                  }}
+                  onDelete={() => {
+                    if (!isLocked) {
+                      handleComponentDelete(component.id);
+                    }
+                  }}
+                  onLabelUpdate={(label) => {
+                    if (!isLocked) {
+                      handleComponentLabelUpdate(component.id, label);
+                    }
+                  }}
+                  onStartEditing={(label) => {
+                    if (!isLocked) {
+                      handleStartEditingLabel(component.id, label);
+                    }
+                  }}
+                  onClick={() => {
+                    if (!isLocked) {
+                      handleComponentClick(component.id, component.type);
+                    }
+                  }}
                   onDoubleClick={() => handleComponentDoubleClick(component.id, component.type)}
+                  isLocked={isLocked}
                 />
               )
             ))}
