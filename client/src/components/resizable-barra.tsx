@@ -40,6 +40,7 @@ export default function ResizableBarra({
 }: ResizableBarraProps) {
   const groupRef = useRef<any>(null);
   const transformerRef = useRef<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (isSelected && transformerRef.current && groupRef.current) {
@@ -48,8 +49,21 @@ export default function ResizableBarra({
     }
   }, [isSelected]);
 
+  const handleDragStart = (e: any) => {
+    setIsDragging(true);
+  };
+
   const handleDragEnd = (e: any) => {
+    setIsDragging(false);
     onDragEnd(e.target.x(), e.target.y());
+  };
+
+  const handleClick = (e: any) => {
+    e.evt.stopPropagation();
+    // Solo seleccionar si no estamos arrastrando
+    if (!isDragging) {
+      onSelect();
+    }
   };
 
   const handleTransformEnd = () => {
@@ -77,19 +91,20 @@ export default function ResizableBarra({
         x={x}
         y={y}
         draggable={!isLocked}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onClick={onSelect}
-        onTap={onSelect}
+        onClick={handleClick}
+        onTap={handleClick}
         onTransformEnd={handleTransformEnd}
       >
         {/* Barra rectangle with electrical busbar styling */}
         <Rect
           width={width}
           height={height}
-          fill="#C0C0C0" // Metallic silver color for electrical busbar
-          stroke={isSelected ? "#2563eb" : "#808080"}
-          strokeWidth={isSelected ? 3 : 2}
-          rx={2} // Slight rounding for modern electrical busbar look
+          fill="#000000" // 100% black color for electrical busbar
+          stroke={isSelected ? "#2563eb" : "#333333"}
+          strokeWidth={isSelected ? 3 : 1}
+          rx={1} // Slight rounding for modern electrical busbar look
         />
         
         {/* Electrical connection points */}
@@ -97,16 +112,16 @@ export default function ResizableBarra({
           x={5}
           y={height / 2}
           radius={3}
-          fill="#FFD700"
-          stroke="#B8860B"
+          fill="#000000"
+          stroke="#000000"
           strokeWidth={1}
         />
         <Circle
           x={width - 5}
           y={height / 2}
           radius={3}
-          fill="#FFD700"
-          stroke="#B8860B"
+          fill="#000000"
+          stroke="#000000"
           strokeWidth={1}
         />
         
@@ -185,11 +200,11 @@ export default function ResizableBarra({
           enabledAnchors={['middle-left', 'middle-right']} // Only horizontal resizing for electrical busbars
           boundBoxFunc={(oldBox, newBox) => {
             // Minimum and maximum size constraints for electrical busbars
-            if (newBox.width < 40) {
-              newBox.width = 40; // Minimum busbar length
+            if (newBox.width < 30) {
+              newBox.width = 30; // Minimum busbar length (más pequeño)
             }
-            if (newBox.width > 400) {
-              newBox.width = 400; // Maximum busbar length
+            if (newBox.width > 300) {
+              newBox.width = 300; // Maximum busbar length (más pequeño)
             }
             // Keep height consistent for busbars
             newBox.height = oldBox.height;

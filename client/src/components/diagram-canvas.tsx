@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { Stage, Layer, Line, Transformer } from "react-konva";
 import BuildingBlock from "./building-block";
 import { ElectricalSymbols } from "./electrical-symbols";
@@ -8,6 +8,7 @@ import CargaDashboard from "./carga-dashboard";
 import { Button } from "@/components/ui/button";
 import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useResponsiveCanvas } from "@/hooks/use-responsive-canvas";
 import type { Building } from "@shared/schema";
 
 interface DraggableItem {
@@ -48,8 +49,13 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState<string | null>(null);
   const [editingComponent, setEditingComponent] = useState<{ id: string; label: string } | null>(null);
+  
   const stageRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Hook responsivo para dimensiones automáticas
+  const canvasDimensions = useResponsiveCanvas(containerRef);
 
   const handleZoomIn = () => {
     setZoomLevel(prev => Math.min(prev + 25, 400));
@@ -74,14 +80,14 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       
       const newComponent: DraggableItem = {
         id: `component-${Date.now()}`,
-        type: data.componentId,
+        type: data.componentId === "busbar" ? "barras" : data.componentId, // Mapear busbar a barras
         symbol: data.componentSymbol,
         name: data.componentName,
         label: data.componentName,
         x: x - 25, // Center the component
         y: y - 25,
-        width: data.componentId === "barras" ? 80 : undefined,
-        height: data.componentId === "barras" ? 20 : undefined
+        width: (data.componentId === "busbar" || data.componentId === "barras") ? 60 : undefined, // Ancho más pequeño para barras
+        height: (data.componentId === "busbar" || data.componentId === "barras") ? 15 : undefined // Altura más pequeña para barras
       };
       
       setDroppedComponents(prev => [...prev, newComponent]);
@@ -116,31 +122,36 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       const toComponent = components.find(c => c.id === connection.to);
       
       if (fromComponent && toComponent) {
-        const fromCenterX = fromComponent.x + (fromComponent.width ? fromComponent.width / 2 : 25);
-        const fromCenterY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 25);
-        const toCenterX = toComponent.x + (toComponent.width ? toComponent.width / 2 : 25);
-        const toCenterY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 25);
+        // Para barras, usar puntos laterales; para otros componentes, usar parte superior central del símbolo
+        let fromConnectionX, fromConnectionY, toConnectionX, toConnectionY;
         
-        // Calculate connection points at component edges for straight lines
-        const dx = toCenterX - fromCenterX;
-        const dy = toCenterY - fromCenterY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 0) {
-          // Use center points for cleaner connections
-          const fromConnectionX = fromCenterX;
-          const fromConnectionY = fromCenterY;
-          const toConnectionX = toCenterX;
-          const toConnectionY = toCenterY;
-          
-          // Create 90-degree angle routing from center to center
-          const points = create90DegreeRoute(fromConnectionX, fromConnectionY, toConnectionX, toConnectionY);
-          
-          return {
-            ...connection,
-            points
-          };
+        if (fromComponent.type === "barras") {
+          // Para barras: usar el centro lateral derecho
+          fromConnectionX = fromComponent.x + (fromComponent.width || 60);
+          fromConnectionY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 7.5);
+        } else {
+          // Para otros componentes: usar el centro del símbolo (coincide con el punto visual dorado)
+          fromConnectionX = fromComponent.x + 25; // Centro del componente (50px/2)
+          fromConnectionY = fromComponent.y + 15; // Coincide con el punto dorado en y=-10 relativo
         }
+        
+        if (toComponent.type === "barras") {
+          // Para barras: usar el centro lateral izquierdo
+          toConnectionX = toComponent.x;
+          toConnectionY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 7.5);
+        } else {
+          // Para otros componentes: usar el centro del símbolo (coincide con el punto visual dorado)
+          toConnectionX = toComponent.x + 25; // Centro del componente (50px/2)
+          toConnectionY = toComponent.y + 15; // Coincide con el punto dorado en y=-10 relativo
+        }
+        
+        // Create 90-degree angle routing between connection points
+        const points = create90DegreeRoute(fromConnectionX, fromConnectionY, toConnectionX, toConnectionY);
+        
+        return {
+          ...connection,
+          points
+        };
       }
       return connection;
     }));
@@ -200,14 +211,34 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         const toComponent = droppedComponents.find(c => c.id === componentId);
         
         if (fromComponent && toComponent) {
+          // Calcular puntos de conexión correctos - directo al símbolo
+          let fromX, fromY, toX, toY;
+          
+          if (fromComponent.type === "barras") {
+            // Para barras: usar el centro lateral derecho
+            fromX = fromComponent.x + (fromComponent.width || 60);
+            fromY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 7.5);
+          } else {
+            // Para otros componentes: directamente en el centro del símbolo
+            fromX = fromComponent.x + 25; // Centro del componente (50px/2)
+            fromY = fromComponent.y + 15; // Coincide con el punto dorado
+          }
+          
+          if (toComponent.type === "barras") {
+            // Para barras: usar el centro lateral izquierdo
+            toX = toComponent.x;
+            toY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 7.5);
+          } else {
+            // Para otros componentes: directamente en el centro del símbolo
+            toX = toComponent.x + 25; // Centro del componente (50px/2)
+            toY = toComponent.y + 15; // Coincide con el punto dorado
+          }
+          
           const newConnection: Connection = {
             id: `connection-${Date.now()}`,
             from: connectingFrom,
             to: componentId,
-            points: [
-              fromComponent.x + 25, fromComponent.y + 25,
-              toComponent.x + 25, toComponent.y + 25
-            ]
+            points: create90DegreeRoute(fromX, fromY, toX, toY)
           };
           
           setConnections(prev => [...prev, newConnection]);
@@ -239,9 +270,9 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   return (
     <div className="flex-1 flex flex-col bg-gray-100 relative">
       {/* Canvas Toolbar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
+      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center space-x-1 sm:space-x-4">
+          <div className="flex items-center space-x-1 sm:space-x-2">
             <Button
               variant={tool === "select" ? "default" : "ghost"}
               size="sm"
@@ -250,6 +281,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <MousePointer className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Seleccionar</span>
             </Button>
             <Button
               variant={tool === "move" ? "default" : "ghost"}
@@ -259,6 +291,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <Move className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Mover</span>
             </Button>
             <Button
               variant={tool === "connect" ? "default" : "ghost"}
@@ -268,6 +301,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <Link className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Conectar</span>
             </Button>
             <Button
               variant={tool === "edit" ? "default" : "ghost"}
@@ -279,6 +313,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               title="Modo Edición"
             >
               <Edit3 className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Editar</span>
             </Button>
             <Button
               variant={isLocked ? "default" : "ghost"}
@@ -360,6 +395,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
       {/* Main Diagram Canvas */}
       <div 
+        ref={containerRef}
         className="flex-1 relative overflow-hidden"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -376,32 +412,37 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         )}
         
         {/* Drop zone indicator */}
-        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 z-10">
           <div className="flex items-center space-x-2">
             <span>📋</span>
-            <span>Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+            <span className="hidden sm:inline">Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+            <span className="sm:hidden">Arrastra símbolos aquí</span>
           </div>
         </div>
         
         {/* Component count indicator */}
         {droppedComponents.length > 0 && (
-          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700">
-            {droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama
+          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700 z-10">
+            <span className="hidden sm:inline">{droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama</span>
+            <span className="sm:hidden">{droppedComponents.length} comp.</span>
           </div>
         )}
         
         {/* Konva Stage for electrical diagram */}
         <Stage
           ref={stageRef}
-          width={window.innerWidth}
-          height={window.innerHeight - 120} // Account for header and toolbar
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
           scaleX={zoomLevel / 100}
           scaleY={zoomLevel / 100}
           draggable={tool === "move"}
           onClick={(e) => {
-            // Only deselect if clicking on empty canvas
+            // Click en área vacía deselecciona
             if (e.target === e.target.getStage()) {
               setSelectedComponent(null);
+              if (tool === "connect") {
+                setConnectingFrom(null);
+              }
             }
           }}
         >
@@ -412,10 +453,38 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 key={connection.id}
                 points={connection.points}
                 stroke="#374151"
-                strokeWidth={2}
+                strokeWidth={4} // Líneas más gruesas
                 lineCap="square"
                 lineJoin="miter"
                 tension={0}
+                onClick={(e) => {
+                  e.evt.stopPropagation();
+                  if (tool === "select") {
+                    // Mostrar opción de eliminar conexión
+                    const confirmDelete = window.confirm("¿Eliminar esta conexión?");
+                    if (confirmDelete) {
+                      setConnections(prev => prev.filter(conn => conn.id !== connection.id));
+                      toast({
+                        title: "Conexión eliminada",
+                        description: "La conexión ha sido eliminada del diagrama",
+                      });
+                    }
+                  }
+                }}
+                onTap={(e) => {
+                  e.evt.stopPropagation();
+                  if (tool === "select") {
+                    // Mostrar opción de eliminar conexión en dispositivos táctiles
+                    const confirmDelete = window.confirm("¿Eliminar esta conexión?");
+                    if (confirmDelete) {
+                      setConnections(prev => prev.filter(conn => conn.id !== connection.id));
+                      toast({
+                        title: "Conexión eliminada",
+                        description: "La conexión ha sido eliminada del diagrama",
+                      });
+                    }
+                  }
+                }}
               />
             ))}
             
@@ -430,8 +499,8 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   label={component.label}
                   x={component.x}
                   y={component.y}
-                  width={component.width || 80}
-                  height={component.height || 20}
+                  width={component.width || 60} // Ancho por defecto más pequeño
+                  height={component.height || 15} // Altura por defecto más pequeña
                   isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
                   onSelect={() => {
                     if (!isLocked) {

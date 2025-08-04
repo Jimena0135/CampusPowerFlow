@@ -2,11 +2,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Play } from "lucide-react";
+import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-export default function ComponentLibrary() {
+interface ComponentLibraryProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+export default function ComponentLibrary({ isOpen, onToggle }: ComponentLibraryProps) {
   const [sqlQuery, setSqlQuery] = useState("SELECT voltage, current, power FROM electrical_data WHERE building_id = 'BLOQUE_A' ORDER BY timestamp DESC LIMIT 10");
   const { toast } = useToast();
 
@@ -41,26 +46,48 @@ export default function ComponentLibrary() {
   const categories = Array.from(new Set(electricalComponents.map(c => c.category)));
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">Librería de Componentes</h2>
-        <div className="text-center">
-          <span className="text-sm font-medium text-gray-600">Símbolos NTC2050</span>
-        </div>
-      </div>
+    <div className="w-full bg-white border-r border-gray-200 flex flex-col h-full">
+      {isOpen ? (
+        // Vista completa
+        <>
+          {/* Header con botón de colapsar */}
+          <div className="p-3 sm:p-4 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold text-gray-800 mb-1">Librería de Componentes</h2>
+                <div className="text-center">
+                  <span className="text-xs sm:text-sm font-medium text-gray-600">Símbolos NTC2050</span>
+                </div>
+              </div>
+              {onToggle && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggle}
+                  className="p-2 hover:bg-gray-100"
+                  title="Minimizar librería"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
       
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-4">
+      {/* Área de componentes con scroll */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+        <div className="space-y-3 sm:space-y-4">
           {categories.map(category => (
             <div key={category}>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">{category}</h3>
+              <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sticky top-0 bg-white py-1 z-10">
+                {category}
+              </h3>
               <div className="grid grid-cols-2 gap-2">
                 {electricalComponents
                   .filter(component => component.category === category)
                   .map(component => (
                     <div 
                       key={component.id}
-                      className="p-3 bg-white hover:bg-gray-50 cursor-grab active:cursor-grabbing border border-gray-200 rounded-lg transition-colors"
+                      className="p-2 sm:p-3 bg-white hover:bg-gray-50 cursor-grab active:cursor-grabbing border border-gray-200 rounded-lg transition-all duration-200 hover:shadow-md hover:border-blue-300"
                       draggable={true}
                       onDragStart={(e) => {
                         e.dataTransfer.setData('application/json', JSON.stringify({
@@ -72,36 +99,62 @@ export default function ComponentLibrary() {
                       }}
                       title={`Arrastrar ${component.name} al diagrama`}
                     >
-                      <div className="w-full h-8 flex items-center justify-center">
-                        <span className="text-xl text-gray-700">{component.symbol}</span>
+                      <div className="w-full h-6 sm:h-8 flex items-center justify-center">
+                        <span className="text-lg sm:text-xl text-gray-700">{component.symbol}</span>
                       </div>
-                      <p className="text-xs text-gray-600 mt-1 text-center">{component.name}</p>
+                      <p className="text-xs text-gray-600 mt-1 text-center truncate">{component.name}</p>
                     </div>
                   ))}
               </div>
             </div>
           ))}
         </div>
-      </div>
-      
-      {/* SQL Query Panel */}
-      <div className="border-t border-gray-200 p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Consulta SQL</h3>
-        <Textarea
-          value={sqlQuery}
-          onChange={(e) => setSqlQuery(e.target.value)}
-          className="h-20 text-xs font-mono resize-none"
-          placeholder="SELECT voltage, current, power FROM electrical_data WHERE building_id = 'BLOQUE_A' ORDER BY timestamp DESC LIMIT 10"
-        />
-        <Button 
-          onClick={handleExecuteQuery}
-          className="w-full mt-2 bg-green-600 hover:bg-green-700"
-          size="sm"
-        >
-          <Play className="w-4 h-4 mr-1" />
-          Ejecutar Consulta
-        </Button>
-      </div>
+          </div>
+        </>
+      ) : (
+        // Vista minimizada - barra lateral pequeña con texto vertical
+        <div className="w-full h-full flex flex-col bg-gray-50">
+          {/* Botón para expandir en la parte superior */}
+          <div className="flex justify-center p-2 border-b border-gray-200">
+            {onToggle && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onToggle}
+                className="p-2 hover:bg-gray-100 rounded-full"
+                title="Expandir librería"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+          
+          {/* Texto vertical */}
+          <div className="flex-1 flex items-center justify-center py-4">
+            <div className="transform -rotate-90 whitespace-nowrap">
+              <span className="text-sm font-medium text-gray-700">
+                Librería de Componentes
+              </span>
+            </div>
+          </div>
+          
+          {/* Iconos de categorías minimizados */}
+          <div className="flex flex-col items-center space-y-3 p-3 border-t border-gray-200">
+            <div 
+              className="w-3 h-3 bg-blue-500 rounded" 
+              title="Componentes de Control"
+            ></div>
+            <div 
+              className="w-3 h-3 bg-green-500 rounded-full" 
+              title="Componentes de Potencia"
+            ></div>
+            <div 
+              className="w-3 h-3 bg-yellow-500 rounded" 
+              title="Instrumentos"
+            ></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

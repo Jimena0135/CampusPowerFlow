@@ -42,9 +42,34 @@ export default function DraggableComponent({
   onDoubleClick
 }: DraggableComponentProps) {
   const groupRef = useRef<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragStart = (e: any) => {
+    setIsDragging(true);
+  };
 
   const handleDragEnd = (e: any) => {
+    setIsDragging(false);
     onDragEnd(e.target.x(), e.target.y());
+  };
+
+  const handleClick = (e: any) => {
+    e.evt.stopPropagation();
+    // Solo seleccionar si no estamos arrastrando
+    if (!isDragging) {
+      onSelect();
+      if (onClick) {
+        onClick();
+      }
+    }
+  };
+
+  const handleDoubleClick = (e: any) => {
+    e.evt.stopPropagation();
+    console.log('Component double clicked:', type, id);
+    if ((type === "carga" || type === "load") && onDoubleClick) {
+      onDoubleClick();
+    }
   };
 
   const handleLabelEdit = () => {
@@ -58,35 +83,12 @@ export default function DraggableComponent({
         x={x}
         y={y}
         draggable={!isLocked}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onClick={(e) => {
-          e.evt.stopPropagation();
-          onSelect();
-          if (onClick) {
-            onClick();
-          }
-        }}
-        onDblClick={(e) => {
-          e.evt.stopPropagation();
-          console.log('Component double clicked:', type, id); // Debug log
-          if ((type === "carga" || type === "load") && onDoubleClick) {
-            onDoubleClick();
-          }
-        }}
-        onTap={(e) => {
-          e.evt.stopPropagation();
-          onSelect();
-          if (onClick) {
-            onClick();
-          }
-        }}
-        onDblTap={(e) => {
-          e.evt.stopPropagation();
-          console.log('Component double tapped:', type, id); // Debug log
-          if ((type === "carga" || type === "load") && onDoubleClick) {
-            onDoubleClick();
-          }
-        }}
+        onClick={handleClick}
+        onDblClick={handleDoubleClick}
+        onTap={handleClick}
+        onDblTap={handleDoubleClick}
       >
         {/* Background for component - no circle */}
         
@@ -99,6 +101,16 @@ export default function DraggableComponent({
           fill="#374151"
           align="center"
           fontWeight="bold"
+        />
+        
+        {/* Connection point at center of symbol */}
+        <Circle
+          x={0}
+          y={-10} // Directamente en el centro del símbolo
+          radius={3}
+          fill="#FFD700"
+          stroke="#B8860B"
+          strokeWidth={1}
         />
         
         {/* Connection point indicator (small circle at center) */}
