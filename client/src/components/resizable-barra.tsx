@@ -12,6 +12,7 @@ interface ResizableBarraProps {
   height: number;
   isSelected: boolean;
   isLocked?: boolean;
+  isDragEnabled?: boolean;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   onResize: (width: number, height: number) => void;
@@ -31,6 +32,7 @@ export default function ResizableBarra({
   height,
   isSelected,
   isLocked = false,
+  isDragEnabled = false,
   onSelect,
   onDragEnd,
   onResize,
@@ -41,6 +43,7 @@ export default function ResizableBarra({
   const groupRef = useRef<any>(null);
   const transformerRef = useRef<any>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasBeenDragged, setHasBeenDragged] = useState(false);
 
   useEffect(() => {
     if (isSelected && transformerRef.current && groupRef.current) {
@@ -50,18 +53,31 @@ export default function ResizableBarra({
   }, [isSelected]);
 
   const handleDragStart = (e: any) => {
+    if (!isDragEnabled) return;
     setIsDragging(true);
+    setHasBeenDragged(false);
+  };
+
+  const handleDragMove = (e: any) => {
+    if (!isDragEnabled) return;
+    if (isDragging) {
+      setHasBeenDragged(true);
+    }
   };
 
   const handleDragEnd = (e: any) => {
+    if (!isDragEnabled) return;
     setIsDragging(false);
-    onDragEnd(e.target.x(), e.target.y());
+    if (hasBeenDragged) {
+      onDragEnd(e.target.x(), e.target.y());
+    }
+    setHasBeenDragged(false);
   };
 
   const handleClick = (e: any) => {
     e.evt.stopPropagation();
-    // Solo seleccionar si no estamos arrastrando
-    if (!isDragging) {
+    // Solo seleccionar si no estamos arrastrando o si no se ha movido el componente
+    if (!isDragging && !hasBeenDragged) {
       onSelect();
     }
   };
@@ -90,8 +106,9 @@ export default function ResizableBarra({
         ref={groupRef}
         x={x}
         y={y}
-        draggable={!isLocked}
+        draggable={!isLocked && isDragEnabled}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onClick={handleClick}
         onTap={handleClick}
@@ -107,23 +124,29 @@ export default function ResizableBarra({
           rx={1} // Slight rounding for modern electrical busbar look
         />
         
-        {/* Electrical connection points */}
-        <Circle
-          x={5}
-          y={height / 2}
-          radius={3}
-          fill="#000000"
-          stroke="#000000"
-          strokeWidth={1}
-        />
-        <Circle
-          x={width - 5}
-          y={height / 2}
-          radius={3}
-          fill="#000000"
-          stroke="#000000"
-          strokeWidth={1}
-        />
+        {/* Multiple electrical connection points distributed along the bar */}
+        {(() => {
+          const numPoints = Math.max(3, Math.floor(width / 15)); // Mínimo 3 puntos, uno cada 15px
+          const spacing = width / (numPoints - 1);
+          const points = [];
+          
+          for (let i = 0; i < numPoints; i++) {
+            const pointX = i * spacing;
+            points.push(
+              <Circle
+                key={`connection-point-${i}`}
+                x={pointX}
+                y={height / 2}
+                radius={2}
+                fill={isSelected ? "#FFD700" : "#000000"}
+                stroke={isSelected ? "#B8860B" : "#000000"}
+                strokeWidth={1}
+              />
+            );
+          }
+          
+          return points;
+        })()}
         
         {/* Component label */}
         <Text

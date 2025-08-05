@@ -12,10 +12,15 @@ interface DraggableComponentProps {
   label?: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   isSelected: boolean;
   isLocked?: boolean;
+  isDragEnabled?: boolean;
+  isConnected?: boolean;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
+  onResize?: (width: number, height: number) => void;
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
   onStartEditing: (label: string) => void;
@@ -31,10 +36,15 @@ export default function DraggableComponent({
   label,
   x,
   y,
+  width = 50,
+  height = 50,
   isSelected,
   isLocked = false,
+  isDragEnabled = false,
+  isConnected = false,
   onSelect,
   onDragEnd,
+  onResize,
   onDelete,
   onLabelUpdate,
   onStartEditing,
@@ -43,20 +53,34 @@ export default function DraggableComponent({
 }: DraggableComponentProps) {
   const groupRef = useRef<any>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasBeenDragged, setHasBeenDragged] = useState(false);
 
   const handleDragStart = (e: any) => {
+    if (!isDragEnabled) return;
     setIsDragging(true);
+    setHasBeenDragged(false);
+  };
+
+  const handleDragMove = (e: any) => {
+    if (!isDragEnabled) return;
+    if (isDragging) {
+      setHasBeenDragged(true);
+    }
   };
 
   const handleDragEnd = (e: any) => {
+    if (!isDragEnabled) return;
     setIsDragging(false);
-    onDragEnd(e.target.x(), e.target.y());
+    if (hasBeenDragged) {
+      onDragEnd(e.target.x(), e.target.y());
+    }
+    setHasBeenDragged(false);
   };
 
   const handleClick = (e: any) => {
     e.evt.stopPropagation();
-    // Solo seleccionar si no estamos arrastrando
-    if (!isDragging) {
+    // Solo seleccionar si no estamos arrastrando o si no se ha movido el componente
+    if (!isDragging && !hasBeenDragged) {
       onSelect();
       if (onClick) {
         onClick();
@@ -82,8 +106,9 @@ export default function DraggableComponent({
         ref={groupRef}
         x={x}
         y={y}
-        draggable={!isLocked}
+        draggable={!isLocked && isDragEnabled}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onClick={handleClick}
         onDblClick={handleDoubleClick}
@@ -94,10 +119,10 @@ export default function DraggableComponent({
         
         {/* Component symbol */}
         <Text
-          x={-15}
-          y={-8}
+          x={-width/4}
+          y={-height/4}
           text={symbol}
-          fontSize={24}
+          fontSize={Math.min(width, height) * 0.4}
           fill="#374151"
           align="center"
           fontWeight="bold"
@@ -106,10 +131,10 @@ export default function DraggableComponent({
         {/* Connection point at center of symbol */}
         <Circle
           x={0}
-          y={-10} // Directamente en el centro del símbolo
-          radius={3}
-          fill="#FFD700"
-          stroke="#B8860B"
+          y={-height/4} // Parte superior del símbolo escalado
+          radius={Math.min(width, height) * 0.06}
+          fill={isConnected ? "#10B981" : "#FFD700"} // Verde si está conectado, dorado si no
+          stroke={isConnected ? "#059669" : "#B8860B"}
           strokeWidth={1}
         />
         
@@ -117,20 +142,20 @@ export default function DraggableComponent({
         <Circle
           x={0}
           y={0}
-          radius={2}
-          fill="#2563eb"
+          radius={Math.min(width, height) * 0.04}
+          fill={isConnected ? "#10B981" : "#2563eb"} // Verde si está conectado, azul si no
           opacity={0.6}
         />
         
         {/* Component label */}
         <Text
-          x={-40}
-          y={35}
+          x={-width}
+          y={height/2 + 10}
           text={label || name}
           fontSize={12}
           fill="#6b7280"
           align="center"
-          width={80}
+          width={width * 2}
         />
         
         {/* Selection indicators */}
@@ -138,8 +163,8 @@ export default function DraggableComponent({
           <>
             {/* Delete button */}
             <Circle
-              x={25}
-              y={-25}
+              x={width/2 + 15}
+              y={-height/2 - 15}
               radius={10}
               fill="#ef4444"
               stroke="#ffffff"
@@ -150,8 +175,8 @@ export default function DraggableComponent({
               }}
             />
             <Text
-              x={19}
-              y={-31}
+              x={width/2 + 9}
+              y={-height/2 - 21}
               text="×"
               fontSize={16}
               fill="white"
@@ -163,8 +188,8 @@ export default function DraggableComponent({
             
             {/* Edit button */}
             <Circle
-              x={25}
-              y={5}
+              x={width/2 + 15}
+              y={height/2 + 15}
               radius={10}
               fill="#3b82f6"
               stroke="#ffffff"
@@ -175,8 +200,8 @@ export default function DraggableComponent({
               }}
             />
             <Text
-              x={19}
-              y={-1}
+              x={width/2 + 9}
+              y={height/2 + 9}
               text="✎"
               fontSize={12}
               fill="white"

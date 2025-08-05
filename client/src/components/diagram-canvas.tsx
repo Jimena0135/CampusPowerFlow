@@ -6,7 +6,7 @@ import DraggableComponent from "./draggable-component";
 import ResizableBarra from "./resizable-barra";
 import CargaDashboard from "./carga-dashboard";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock, Plus, Minus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useResponsiveCanvas } from "@/hooks/use-responsive-canvas";
 import type { Building } from "@shared/schema";
@@ -57,6 +57,29 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   // Hook responsivo para dimensiones automáticas
   const canvasDimensions = useResponsiveCanvas(containerRef);
 
+  // Atajos de teclado para tamaño de componentes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Plus: Aumentar tamaño de todos los componentes
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        if (!isLocked && droppedComponents.some(c => c.type !== "barras")) {
+          handleIncreaseAllComponentsSize();
+        }
+      }
+      // Ctrl/Cmd + Minus: Reducir tamaño de todos los componentes
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        if (!isLocked && droppedComponents.some(c => c.type !== "barras")) {
+          handleDecreaseAllComponentsSize();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLocked, droppedComponents]);
+
   const handleZoomIn = () => {
     setZoomLevel(prev => Math.min(prev + 25, 400));
   };
@@ -86,8 +109,8 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         label: data.componentName,
         x: x - 25, // Center the component
         y: y - 25,
-        width: (data.componentId === "busbar" || data.componentId === "barras") ? 60 : undefined, // Ancho más pequeño para barras
-        height: (data.componentId === "busbar" || data.componentId === "barras") ? 15 : undefined // Altura más pequeña para barras
+        width: (data.componentId === "busbar" || data.componentId === "barras") ? 60 : 50, // Tamaño inicial para componentes
+        height: (data.componentId === "busbar" || data.componentId === "barras") ? 15 : 50 // Tamaño inicial para componentes
       };
       
       setDroppedComponents(prev => [...prev, newComponent]);
@@ -116,33 +139,78 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     return [fromX, fromY, midX, fromY, midX, toY, toX, toY];
   };
 
+  // Función para calcular el punto de conexión más cercano en una barra
+  const getClosestBarConnectionPoint = (barComponent: DraggableItem, targetX: number, targetY: number, isSource: boolean = false) => {
+    const barWidth = barComponent.width || 60;
+    const barHeight = barComponent.height || 10;
+    const barCenterY = barComponent.y + barHeight / 2;
+    
+    // Calcular número de puntos de conexión basado en el ancho de la barra
+    const numPoints = Math.max(3, Math.floor(barWidth / 15)); // Mínimo 3 puntos, uno cada 15px
+    const spacing = barWidth / (numPoints - 1);
+    
+    let closestX = barComponent.x;
+    let minDistance = Infinity;
+    
+    // Evaluar todos los puntos de conexión posibles
+    for (let i = 0; i < numPoints; i++) {
+      const pointX = barComponent.x + (i * spacing);
+      const distance = Math.abs(pointX - targetX);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestX = pointX;
+      }
+    }
+    
+    return {
+      x: closestX,
+      y: barCenterY
+    };
+  };
+
   const updateConnectionsForComponents = (components: DraggableItem[]) => {
     setConnections(prev => prev.map(connection => {
       const fromComponent = components.find(c => c.id === connection.from);
       const toComponent = components.find(c => c.id === connection.to);
       
       if (fromComponent && toComponent) {
-        // Para barras, usar puntos laterales; para otros componentes, usar parte superior central del símbolo
         let fromConnectionX, fromConnectionY, toConnectionX, toConnectionY;
         
         if (fromComponent.type === "barras") {
-          // Para barras: usar el centro lateral derecho
-          fromConnectionX = fromComponent.x + (fromComponent.width || 60);
-          fromConnectionY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 7.5);
+          // Para barras: calcular el punto de conexión más cercano al destino
+          const targetX = toComponent.type === "barras" 
+            ? toComponent.x + (toComponent.width || 60) / 2 
+            : toComponent.x;
+          const targetY = toComponent.type === "barras" 
+            ? toComponent.y + (toComponent.height || 10) / 2 
+            : toComponent.y - 10;
+            
+          const connectionPoint = getClosestBarConnectionPoint(fromComponent, targetX, targetY, true);
+          fromConnectionX = connectionPoint.x;
+          fromConnectionY = connectionPoint.y;
         } else {
-          // Para otros componentes: usar el centro del símbolo (coincide con el punto visual dorado)
-          fromConnectionX = fromComponent.x + 25; // Centro del componente (50px/2)
-          fromConnectionY = fromComponent.y + 15; // Coincide con el punto dorado en y=-10 relativo
+          // Para otros componentes: usar la parte superior central del símbolo
+          fromConnectionX = fromComponent.x;
+          fromConnectionY = fromComponent.y - (fromComponent.height || 50) / 4; // Parte superior del símbolo escalado
         }
         
         if (toComponent.type === "barras") {
-          // Para barras: usar el centro lateral izquierdo
-          toConnectionX = toComponent.x;
-          toConnectionY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 7.5);
+          // Para barras: calcular el punto de conexión más cercano al origen
+          const sourceX = fromComponent.type === "barras" 
+            ? fromConnectionX 
+            : fromComponent.x;
+          const sourceY = fromComponent.type === "barras" 
+            ? fromConnectionY 
+            : fromComponent.y - (fromComponent.height || 50) / 4;
+            
+          const connectionPoint = getClosestBarConnectionPoint(toComponent, sourceX, sourceY, false);
+          toConnectionX = connectionPoint.x;
+          toConnectionY = connectionPoint.y;
         } else {
-          // Para otros componentes: usar el centro del símbolo (coincide con el punto visual dorado)
-          toConnectionX = toComponent.x + 25; // Centro del componente (50px/2)
-          toConnectionY = toComponent.y + 15; // Coincide con el punto dorado en y=-10 relativo
+          // Para otros componentes: usar la parte superior central del símbolo
+          toConnectionX = toComponent.x;
+          toConnectionY = toComponent.y - (toComponent.height || 50) / 4; // Parte superior del símbolo escalado
         }
         
         // Create 90-degree angle routing between connection points
@@ -185,6 +253,75 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     );
   };
 
+  const handleIncreaseComponentSize = () => {
+    if (selectedComponent) {
+      const component = droppedComponents.find(c => c.id === selectedComponent);
+      if (component && component.type !== "barras") {
+        const newWidth = Math.min((component.width || 50) + 10, 100);
+        const newHeight = Math.min((component.height || 50) + 10, 100);
+        handleComponentResize(selectedComponent, newWidth, newHeight);
+      }
+    }
+  };
+
+  const handleDecreaseComponentSize = () => {
+    if (selectedComponent) {
+      const component = droppedComponents.find(c => c.id === selectedComponent);
+      if (component && component.type !== "barras") {
+        const newWidth = Math.max((component.width || 50) - 10, 20);
+        const newHeight = Math.max((component.height || 50) - 10, 20);
+        handleComponentResize(selectedComponent, newWidth, newHeight);
+      }
+    }
+  };
+
+  const handleIncreaseAllComponentsSize = () => {
+    setDroppedComponents(prev => 
+      prev.map(comp => {
+        if (comp.type !== "barras") {
+          const newWidth = Math.min((comp.width || 50) + 10, 120);
+          const newHeight = Math.min((comp.height || 50) + 10, 120);
+          return { ...comp, width: newWidth, height: newHeight };
+        }
+        return comp;
+      })
+    );
+    
+    // Actualizar conexiones después del cambio de tamaño
+    setTimeout(() => updateConnectionsForComponents(droppedComponents), 100);
+    
+    toast({
+      title: "Tamaño aumentado",
+      description: "Todos los componentes han sido aumentados de tamaño",
+    });
+  };
+
+  const handleDecreaseAllComponentsSize = () => {
+    setDroppedComponents(prev => 
+      prev.map(comp => {
+        if (comp.type !== "barras") {
+          const newWidth = Math.max((comp.width || 50) - 10, 20);
+          const newHeight = Math.max((comp.height || 50) - 10, 20);
+          return { ...comp, width: newWidth, height: newHeight };
+        }
+        return comp;
+      })
+    );
+    
+    // Actualizar conexiones después del cambio de tamaño
+    setTimeout(() => updateConnectionsForComponents(droppedComponents), 100);
+    
+    toast({
+      title: "Tamaño reducido",
+      description: "Todos los componentes han sido reducidos de tamaño",
+    });
+  };
+
+  // Función para verificar si un componente está conectado
+  const isComponentConnected = (componentId: string): boolean => {
+    return connections.some((conn: Connection) => conn.from === componentId || conn.to === componentId);
+  };
+
   const clearAllComponents = () => {
     setDroppedComponents([]);
     setConnections([]);
@@ -211,27 +348,43 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         const toComponent = droppedComponents.find(c => c.id === componentId);
         
         if (fromComponent && toComponent) {
-          // Calcular puntos de conexión correctos - directo al símbolo
+          // Calcular puntos de conexión correctos
           let fromX, fromY, toX, toY;
           
           if (fromComponent.type === "barras") {
-            // Para barras: usar el centro lateral derecho
-            fromX = fromComponent.x + (fromComponent.width || 60);
-            fromY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 7.5);
+            // Para barras: calcular el punto de conexión más cercano al destino
+            const targetX = toComponent.type === "barras" 
+              ? toComponent.x + (toComponent.width || 60) / 2 
+              : toComponent.x;
+            const targetY = toComponent.type === "barras" 
+              ? toComponent.y + (toComponent.height || 10) / 2 
+              : toComponent.y - (toComponent.height || 50) / 4;
+              
+            const connectionPoint = getClosestBarConnectionPoint(fromComponent, targetX, targetY, true);
+            fromX = connectionPoint.x;
+            fromY = connectionPoint.y;
           } else {
-            // Para otros componentes: directamente en el centro del símbolo
-            fromX = fromComponent.x + 25; // Centro del componente (50px/2)
-            fromY = fromComponent.y + 15; // Coincide con el punto dorado
+            // Para otros componentes: usar la parte superior central del símbolo
+            fromX = fromComponent.x;
+            fromY = fromComponent.y - (fromComponent.height || 50) / 4; // Parte superior del símbolo escalado
           }
           
           if (toComponent.type === "barras") {
-            // Para barras: usar el centro lateral izquierdo
-            toX = toComponent.x;
-            toY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 7.5);
+            // Para barras: calcular el punto de conexión más cercano al origen
+            const sourceX = fromComponent.type === "barras" 
+              ? fromX 
+              : fromComponent.x;
+            const sourceY = fromComponent.type === "barras" 
+              ? fromY 
+              : fromComponent.y - (fromComponent.height || 50) / 4;
+              
+            const connectionPoint = getClosestBarConnectionPoint(toComponent, sourceX, sourceY, false);
+            toX = connectionPoint.x;
+            toY = connectionPoint.y;
           } else {
-            // Para otros componentes: directamente en el centro del símbolo
-            toX = toComponent.x + 25; // Centro del componente (50px/2)
-            toY = toComponent.y + 15; // Coincide con el punto dorado
+            // Para otros componentes: usar la parte superior central del símbolo
+            toX = toComponent.x;
+            toY = toComponent.y - (toComponent.height || 50) / 4; // Parte superior del símbolo escalado
           }
           
           const newConnection: Connection = {
@@ -355,6 +508,67 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               <Maximize2 className="w-4 h-4" />
             </Button>
           </div>
+          
+          {/* Component Size Controls */}
+          {selectedComponent && droppedComponents.find(c => c.id === selectedComponent)?.type !== "barras" && (
+            <>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Tamaño:</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleDecreaseComponentSize}
+                  title="Reducir Tamaño"
+                  disabled={isLocked}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <span className="text-xs text-gray-500 min-w-[40px] text-center">
+                  {droppedComponents.find(c => c.id === selectedComponent)?.width || 50}×{droppedComponents.find(c => c.id === selectedComponent)?.height || 50}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleIncreaseComponentSize}
+                  title="Aumentar Tamaño"
+                  disabled={isLocked}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </>
+          )}
+          
+          {/* Global Component Size Controls */}
+          {droppedComponents.some(c => c.type !== "barras") && (
+            <>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Todos:</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleDecreaseAllComponentsSize}
+                  title="Reducir Tamaño de Todos los Componentes (Ctrl+-)"
+                  disabled={isLocked || droppedComponents.length === 0}
+                >
+                  <Minus className="w-4 h-4" />
+                  <span className="hidden lg:inline ml-1">Reducir</span>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleIncreaseAllComponentsSize}
+                  title="Aumentar Tamaño de Todos los Componentes (Ctrl++)"
+                  disabled={isLocked || droppedComponents.length === 0}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden lg:inline ml-1">Aumentar</span>
+                </Button>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="flex items-center space-x-4">
@@ -500,8 +714,9 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   x={component.x}
                   y={component.y}
                   width={component.width || 60} // Ancho por defecto más pequeño
-                  height={component.height || 15} // Altura por defecto más pequeña
+                  height={component.height || 10} // Altura por defecto más pequeña
                   isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
+                  isDragEnabled={tool === "move"}
                   onSelect={() => {
                     if (!isLocked) {
                       setSelectedComponent(component.id);
@@ -545,7 +760,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   label={component.label}
                   x={component.x}
                   y={component.y}
+                  width={component.width || 50}
+                  height={component.height || 50}
                   isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
+                  isDragEnabled={tool === "move"}
+                  isConnected={isComponentConnected(component.id)}
                   onSelect={() => {
                     if (!isLocked) {
                       setSelectedComponent(component.id);
@@ -555,6 +774,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   onDragEnd={(x, y) => {
                     if (!isLocked) {
                       handleComponentDragEnd(component.id, x, y);
+                    }
+                  }}
+                  onResize={(width, height) => {
+                    if (!isLocked) {
+                      handleComponentResize(component.id, width, height);
                     }
                   }}
                   onDelete={() => {
