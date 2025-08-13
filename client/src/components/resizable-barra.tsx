@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Group, Rect, Text, Circle, Transformer } from "react-konva";
+import React, { useRef } from "react";
+import { Group, Rect, Circle, Text } from "react-konva";
 
 interface ResizableBarraProps {
   id: string;
@@ -14,13 +14,12 @@ interface ResizableBarraProps {
   isLocked?: boolean;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
-  onResize: (width: number, height: number) => void;
   onDelete: () => void;
   onLabelUpdate: (label: string) => void;
   onStartEditing: (label: string) => void;
 }
 
-export default function ResizableBarra({
+const ResizableBarra: React.FC<ResizableBarraProps> = ({
   id,
   symbol,
   name,
@@ -33,37 +32,14 @@ export default function ResizableBarra({
   isLocked = false,
   onSelect,
   onDragEnd,
-  onResize,
   onDelete,
   onLabelUpdate,
   onStartEditing
-}: ResizableBarraProps) {
+}) => {
   const groupRef = useRef<any>(null);
-  const transformerRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (isSelected && transformerRef.current && groupRef.current) {
-      transformerRef.current.nodes([groupRef.current]);
-      transformerRef.current.getLayer().batchDraw();
-    }
-  }, [isSelected]);
 
   const handleDragEnd = (e: any) => {
     onDragEnd(e.target.x(), e.target.y());
-  };
-
-  const handleTransformEnd = () => {
-    if (groupRef.current) {
-      const node = groupRef.current;
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      
-      // Reset scale and update dimensions
-      node.scaleX(1);
-      node.scaleY(1);
-      
-      onResize(width * scaleX, height * scaleY);
-    }
   };
 
   const handleLabelEdit = () => {
@@ -71,134 +47,108 @@ export default function ResizableBarra({
   };
 
   return (
-    <>
-      <Group
-        ref={groupRef}
-        x={x}
-        y={y}
-        draggable={!isLocked}
-        onDragEnd={handleDragEnd}
-        onClick={onSelect}
-        onTap={onSelect}
-        onTransformEnd={handleTransformEnd}
-      >
-        {/* Barra rectangle with electrical busbar styling */}
-        <Rect
-          width={width}
-          height={height}
-          fill="#C0C0C0" // Metallic silver color for electrical busbar
-          stroke={isSelected ? "#2563eb" : "#808080"}
-          strokeWidth={isSelected ? 3 : 2}
-          rx={2} // Slight rounding for modern electrical busbar look
-        />
-        
-        {/* Electrical connection points */}
-        <Circle
-          x={5}
-          y={height / 2}
-          radius={3}
-          fill="#FFD700"
-          stroke="#B8860B"
-          strokeWidth={1}
-        />
-        <Circle
-          x={width - 5}
-          y={height / 2}
-          radius={3}
-          fill="#FFD700"
-          stroke="#B8860B"
-          strokeWidth={1}
-        />
-        
-        {/* Component label */}
-        <Text
-          x={width / 2 - 20}
-          y={height + 10}
-          text={label || name}
-          fontSize={12}
-          fill="#6b7280"
-          align="center"
-          width={40}
-        />
-        
-        {/* Selection indicators */}
-        {isSelected && (
-          <>
-            {/* Delete button */}
-            <Circle
-              x={width + 15}
-              y={-15}
-              radius={10}
-              fill="#ef4444"
-              stroke="#ffffff"
-              strokeWidth={2}
-              onClick={(e) => {
-                e.evt.stopPropagation();
-                onDelete();
-              }}
-            />
-            <Text
-              x={width + 9}
-              y={-21}
-              text="×"
-              fontSize={16}
-              fill="white"
-              onClick={(e) => {
-                e.evt.stopPropagation();
-                onDelete();
-              }}
-            />
-            
-            {/* Edit button */}
-            <Circle
-              x={width + 15}
-              y={15}
-              radius={10}
-              fill="#3b82f6"
-              stroke="#ffffff"
-              strokeWidth={2}
-              onClick={(e) => {
-                e.evt.stopPropagation();
-                handleLabelEdit();
-              }}
-            />
-            <Text
-              x={width + 9}
-              y={9}
-              text="✎"
-              fontSize={12}
-              fill="white"
-              onClick={(e) => {
-                e.evt.stopPropagation();
-                handleLabelEdit();
-              }}
-            />
-          </>
-        )}
-      </Group>
-      
-      {/* Transformer for resizing */}
+    <Group
+      ref={groupRef}
+      x={x}
+      y={y}
+      draggable={!isLocked}
+      onDragEnd={handleDragEnd}
+      onClick={onSelect}
+      onTap={onSelect}
+    >
+      {/* Barra principal */}
+      <Rect
+        x={-width/2}
+        y={-height/2}
+        width={width}
+        height={height}
+        fill="#222"
+        stroke={isSelected ? "#2563eb" : "#333333"}
+        strokeWidth={isSelected ? 3 : 1}
+        cornerRadius={2}
+      />
+      {/* Puntos de conexión laterales */}
+      <Circle
+        x={-width/2}
+        y={0}
+        radius={5}
+        fill="#fff"
+        stroke={isSelected ? "#2563eb" : "#222"}
+        strokeWidth={2}
+      />
+      <Circle
+        x={width/2}
+        y={0}
+        radius={5}
+        fill="#fff"
+        stroke={isSelected ? "#2563eb" : "#222"}
+        strokeWidth={2}
+      />
+      {/* Etiqueta del componente */}
+      <Text
+        x={-width/2}
+        y={height/2 + 10}
+        width={width}
+        align="center"
+        text={label || name}
+        fontSize={14}
+        fill="#6b7280"
+      />
+      {/* Botones de selección */}
       {isSelected && (
-        <Transformer
-          ref={transformerRef}
-          keepRatio={false}
-          enabledAnchors={['middle-left', 'middle-right']} // Only horizontal resizing for electrical busbars
-          boundBoxFunc={(oldBox, newBox) => {
-            // Minimum and maximum size constraints for electrical busbars
-            if (newBox.width < 40) {
-              newBox.width = 40; // Minimum busbar length
-            }
-            if (newBox.width > 400) {
-              newBox.width = 400; // Maximum busbar length
-            }
-            // Keep height consistent for busbars
-            newBox.height = oldBox.height;
-            return newBox;
-          }}
-        />
+        <>
+          {/* Botón eliminar */}
+          <Circle
+            x={width/2 + 18}
+            y={-height/2 - 18}
+            radius={10}
+            fill="#ef4444"
+            stroke="#fff"
+            strokeWidth={2}
+            onClick={(e: any) => {
+              e.evt.stopPropagation();
+              onDelete();
+            }}
+          />
+          <Text
+            x={width/2 + 12}
+            y={-height/2 - 24}
+            text="×"
+            fontSize={16}
+            fill="white"
+            onClick={(e: any) => {
+              e.evt.stopPropagation();
+              onDelete();
+            }}
+          />
+          {/* Botón editar */}
+          <Circle
+            x={width/2 + 18}
+            y={height/2 + 18}
+            radius={10}
+            fill="#3b82f6"
+            stroke="#fff"
+            strokeWidth={2}
+            onClick={(e: any) => {
+              e.evt.stopPropagation();
+              handleLabelEdit();
+            }}
+          />
+          <Text
+            x={width/2 + 12}
+            y={height/2 + 12}
+            text="✎"
+            fontSize={12}
+            fill="white"
+            onClick={(e: any) => {
+              e.evt.stopPropagation();
+              handleLabelEdit();
+            }}
+          />
+        </>
       )}
-      
-
-    </>
+    </Group>
   );
-}
+};
+
+export default ResizableBarra;

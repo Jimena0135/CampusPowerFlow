@@ -48,6 +48,120 @@
   --radius: 0.5rem;
 }
 
+/* Mejoras de responsividad */
+@layer utilities {
+  .responsive-hide-text {
+    @apply hidden lg:inline;
+  }
+  
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+  
+  .tablet-up {
+    @apply hidden sm:block;
+  }
+  
+  .desktop-only {
+    @apply hidden lg:block;
+  }
+  
+  /* Texto vertical para sidebar minimizada */
+  .writing-mode-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+  
+  .text-vertical {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+  }
+  
+  /* Resizers para paneles redimensionables */
+  .resizer {
+    position: absolute;
+    background: transparent;
+    z-index: 10;
+    transition: all 0.2s ease;
+  }
+  
+  .resizer:hover {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  .resizer.resizing {
+    background-color: rgba(59, 130, 246, 0.5);
+  }
+  
+  .resizer-vertical {
+    width: 4px;
+    top: 0;
+    bottom: 0;
+    cursor: col-resize;
+  }
+  
+  .resizer-left {
+    right: -2px;
+  }
+  
+  .resizer-right {
+    left: -2px;
+  }
+  
+  /* Línea visual para indicar la zona de redimensionamiento */
+  .resizer-vertical::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 20px;
+    background-color: rgba(156, 163, 175, 0.4);
+    border-radius: 1px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  
+  .resizer-vertical:hover::before {
+    opacity: 1;
+  }
+  
+  .resizer-vertical.resizing::before {
+    opacity: 1;
+    background-color: rgba(59, 130, 246, 0.8);
+  }
+  
+  /* Indicador visual durante el redimensionamiento */
+  .resizer.resizing::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: rgba(59, 130, 246, 0.8);
+    pointer-events: none;
+    z-index: 9999;
+  }
+}
+
+/* Optimizaciones para canvas */
+.konva-stage {
+  @apply w-full h-full;
+}
+
+/* Sidebar responsivo */
+@media (max-width: 1023px) {
+  .mobile-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .mobile-sidebar.open {
+    transform: translateX(0);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

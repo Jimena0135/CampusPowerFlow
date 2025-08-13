@@ -1,4 +1,4 @@
-# Universidad Nacional - Sistema de Diagrama Unifilar Eléctrico
+# Universidad Pontificia Bolivariana - Sistema de Diagrama Unifilar Eléctrico
 
 ## Overview
 
