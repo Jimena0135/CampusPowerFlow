@@ -5,8 +5,11 @@ import { ElectricalSymbols } from "./electrical-symbols";
 import DraggableComponent from "./draggable-component";
 import ResizableBarra from "./resizable-barra";
 import CargaDashboard from "./carga-dashboard";
+import BateriaDashboard from "./bateria-dashboard";
+import BateriaInversorDashboard from "./bateria-inversor-dashboard";
+import GeneradorSolarDashboard from "./generador-solar-dashboard";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock, Plus, Minus } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Minimize2, Trash2, X, Edit3, Lock, Plus, Minus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useResponsiveCanvas } from "@/hooks/use-responsive-canvas";
 import type { Building } from "@shared/schema";
@@ -38,6 +41,7 @@ interface DiagramCanvasProps {
 }
 
 export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeActive }: DiagramCanvasProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [tool, setTool] = useState<"select" | "move" | "connect" | "edit" | "lock">("select");
   const [zoomLevel, setZoomLevel] = useState(100);
   const [gridEnabled, setGridEnabled] = useState(true);
@@ -104,7 +108,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       const newComponent: DraggableItem = {
         id: `component-${Date.now()}`,
         type: data.componentId === "busbar" ? "barras" : data.componentId, // Mapear busbar a barras
-        symbol: data.componentSymbol,
+        symbol: data.componentId, // Guardar solo el id/tipo
         name: data.componentName,
         label: data.componentName,
         x: x - 25, // Center the component
@@ -143,29 +147,25 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const getClosestBarConnectionPoint = (barComponent: DraggableItem, targetX: number, targetY: number, isSource: boolean = false) => {
     const barWidth = barComponent.width || 60;
     const barHeight = barComponent.height || 10;
-    const barCenterY = barComponent.y + barHeight / 2;
-    
-    // Calcular número de puntos de conexión basado en el ancho de la barra
+    const barY = barComponent.y;
+    const barX = barComponent.x;
+    // Puntos de conexión en la parte inferior de la barra
     const numPoints = Math.max(3, Math.floor(barWidth / 15)); // Mínimo 3 puntos, uno cada 15px
     const spacing = barWidth / (numPoints - 1);
-    
-    let closestX = barComponent.x;
+    let closestX = barX - barWidth/2;
     let minDistance = Infinity;
-    
-    // Evaluar todos los puntos de conexión posibles
     for (let i = 0; i < numPoints; i++) {
-      const pointX = barComponent.x + (i * spacing);
+      const pointX = barX - barWidth/2 + i * spacing;
       const distance = Math.abs(pointX - targetX);
-      
       if (distance < minDistance) {
         minDistance = distance;
         closestX = pointX;
       }
     }
-    
+    // y: parte inferior de la barra
     return {
       x: closestX,
-      y: barCenterY
+      y: barY + barHeight/2 + 6 // 6px debajo de la barra
     };
   };
 
@@ -256,9 +256,13 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const handleIncreaseComponentSize = () => {
     if (selectedComponent) {
       const component = droppedComponents.find(c => c.id === selectedComponent);
-      if (component && component.type !== "barras") {
-        const newWidth = Math.min((component.width || 50) + 10, 100);
-        const newHeight = Math.min((component.height || 50) + 10, 100);
+      if (component) {
+        // Permitir estiramiento horizontal para barras
+        const isBarra = component.type === "barras" || component.type === "barra_colectora";
+        const maxWidth = isBarra ? 300 : 100;
+        const maxHeight = isBarra ? 30 : 100;
+        const newWidth = Math.min((component.width || 60) + 20, maxWidth);
+        const newHeight = isBarra ? (component.height || 15) : Math.min((component.height || 50) + 10, maxHeight);
         handleComponentResize(selectedComponent, newWidth, newHeight);
       }
     }
@@ -267,9 +271,13 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const handleDecreaseComponentSize = () => {
     if (selectedComponent) {
       const component = droppedComponents.find(c => c.id === selectedComponent);
-      if (component && component.type !== "barras") {
-        const newWidth = Math.max((component.width || 50) - 10, 20);
-        const newHeight = Math.max((component.height || 50) - 10, 20);
+      if (component) {
+        // Permitir reducción horizontal para barras
+        const isBarra = component.type === "barras" || component.type === "barra_colectora";
+        const minWidth = isBarra ? 40 : 20;
+        const minHeight = isBarra ? 8 : 20;
+        const newWidth = Math.max((component.width || 60) - 20, minWidth);
+        const newHeight = isBarra ? (component.height || 15) : Math.max((component.height || 50) - 10, minHeight);
         handleComponentResize(selectedComponent, newWidth, newHeight);
       }
     }
@@ -411,19 +419,20 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
   const handleComponentDoubleClick = (componentId: string, componentType: string) => {
     console.log('Double click detected:', componentId, componentType); // Debug log
-    if (componentType === "carga" || componentType === "load") {
+  if (componentType === "carga" || componentType === "load" || componentType === "bateria" || componentType === "bateria_inversor" || componentType === "generador_solar" || componentType === "carga_flecha") {
       setShowDashboard(componentId);
       toast({
         title: "Dashboard abierto",
-        description: `Mostrando dashboard para ${droppedComponents.find(c => c.id === componentId)?.label || "Carga"}`,
+        description: `Mostrando dashboard para ${droppedComponents.find(c => c.id === componentId)?.label || componentType}`,
       });
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-100 relative">
+    <div className={`flex-1 flex flex-col bg-gray-100 relative${isFullscreen ? ' fixed inset-0 z-50 bg-black' : ''}`}> 
       {/* Canvas Toolbar */}
-      <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+      {!isFullscreen && (
+        <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-1 sm:space-x-4">
           <div className="flex items-center space-x-1 sm:space-x-2">
             <Button
@@ -491,6 +500,10 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               title={isLocked ? "Desbloquear" : "Bloquear"}
             >
               <Lock className="w-4 h-4" />
+            </Button>
+            {/* Botón de pantalla completa */}
+            <Button variant="ghost" size="sm" onClick={() => setIsFullscreen(true)} title="Pantalla Completa">
+              <Maximize2 className="w-4 h-4" />
             </Button>
           </div>
           
@@ -605,7 +618,18 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
             </Button>
           </div>
         </div>
-      </div>
+        </div>
+      )}
+      {/* Botón para salir de pantalla completa */}
+      {isFullscreen && (
+        <button
+          className="absolute top-4 right-4 z-50 bg-white rounded-full shadow p-2 border border-gray-300 hover:bg-gray-100 transition"
+          onClick={() => setIsFullscreen(false)}
+          title="Salir de Pantalla Completa"
+        >
+          <Minimize2 className="w-6 h-6 text-gray-700" />
+        </button>
+      )}
 
       {/* Main Diagram Canvas */}
       <div 
@@ -811,23 +835,57 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       </div>
       
       {/* Dashboard Modal */}
-      {showDashboard && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-[900px] h-[700px] relative overflow-y-auto">
-            <button
-              onClick={() => setShowDashboard(null)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <CargaDashboard 
-              cargaId={showDashboard}
-              cargaName={droppedComponents.find(c => c.id === showDashboard)?.label || "Carga"}
+      {showDashboard && (() => {
+        const comp = droppedComponents.find(c => c.id === showDashboard);
+        if (!comp) return null;
+        let DashboardComponent = null;
+        if (comp.type === "bateria") {
+          DashboardComponent = (
+            <BateriaDashboard
+              bateriaId={comp.id}
+              bateriaName={comp.label || "Batería"}
               onClose={() => setShowDashboard(null)}
             />
+          );
+        } else if (comp.type === "bateria_inversor") {
+          DashboardComponent = (
+            <BateriaInversorDashboard
+              bateriaId={comp.id}
+              bateriaName={comp.label || "Batería con Inversor"}
+              onClose={() => setShowDashboard(null)}
+            />
+          );
+        } else if (comp.type === "generador_solar") {
+          DashboardComponent = (
+            <GeneradorSolarDashboard
+              generadorId={comp.id}
+              generadorName={comp.label || "Generador Solar"}
+              onClose={() => setShowDashboard(null)}
+            />
+          );
+        } else {
+          DashboardComponent = (
+            <CargaDashboard
+              cargaId={comp.id}
+              cargaName={comp.label || "Carga"}
+              onClose={() => setShowDashboard(null)}
+            />
+          );
+        }
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-6 w-[900px] h-[700px] relative overflow-y-auto">
+              <button
+                onClick={() => setShowDashboard(null)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              {DashboardComponent}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Label Editing Modal */}
       {editingComponent && (

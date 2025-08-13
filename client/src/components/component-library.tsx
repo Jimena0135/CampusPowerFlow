@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
+import { SolarPanelIcon, TransformerIcon } from "./icons";
+import { BarraColectora, GeneradorSolar, TransformadorCircular, CargaFlecha, Bateria, BateriaInversor } from "./simbolos-tecnicos";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -34,13 +36,12 @@ export default function ComponentLibrary({ isOpen, onToggle }: ComponentLibraryP
   };
 
   const electricalComponents = [
-    { name: "Carga", symbol: "🏢", category: "Cargas Eléctricas", id: "load" },
-    { name: "Transformador", symbol: "⚡", category: "Equipos de Potencia", id: "transformer" },
-    { name: "Inversor", symbol: "〜", category: "Equipos de Potencia", id: "inverter" },
-    { name: "Panel Solar", symbol: "☀", category: "Generación Renovable", id: "solar_panel" },
-    { name: "Batería", symbol: "🔋", category: "Almacenamiento", id: "battery" },
-    { name: "Biodigestor", symbol: "🌱", category: "Generación Renovable", id: "biodigester" },
-    { name: "Barra", symbol: "━", category: "Distribución", id: "busbar" },
+    { name: "Transformador Circular", symbol: <TransformadorCircular />, category: "Transformadores", id: "transformador_circular" },
+    { name: "Generador Solar", symbol: <GeneradorSolar />, category: "Generadores y Cargas", id: "generador_solar" },
+    { name: "Batería", symbol: <Bateria />, category: "Generadores y Cargas", id: "bateria" },
+    { name: "Batería con Inversor", symbol: <BateriaInversor />, category: "Generadores y Cargas", id: "bateria_inversor" },
+    { name: "Carga (Flecha)", symbol: <CargaFlecha />, category: "Generadores y Cargas", id: "carga_flecha" },
+    { name: "Barra Colectora", symbol: <BarraColectora />, category: "Distribución Técnica", id: "barra_colectora" },
   ];
 
   const categories = Array.from(new Set(electricalComponents.map(c => c.category)));
@@ -93,14 +94,17 @@ export default function ComponentLibrary({ isOpen, onToggle }: ComponentLibraryP
                         e.dataTransfer.setData('application/json', JSON.stringify({
                           type: 'component',
                           componentId: component.id,
-                          componentName: component.name,
-                          componentSymbol: component.symbol
+                          componentName: component.name
                         }));
                       }}
                       title={`Arrastrar ${component.name} al diagrama`}
                     >
                       <div className="w-full h-6 sm:h-8 flex items-center justify-center">
-                        <span className="text-lg sm:text-xl text-gray-700">{component.symbol}</span>
+                        {typeof component.symbol === "string" ? (
+                          <span className="text-lg sm:text-xl text-gray-700">{component.symbol}</span>
+                        ) : (
+                          <span className="inline-block align-middle">{component.symbol}</span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-600 mt-1 text-center truncate">{component.name}</p>
                     </div>

@@ -74,7 +74,7 @@ export default function ElectricalDiagram() {
               <span className="hidden sm:inline">Diagrama Unifilar Eléctrico</span>
               <span className="sm:hidden">Unifilar</span>
             </h1>
-            <span className="hidden md:inline text-sm text-gray-500">| Universidad Nacional</span>
+            <span className="hidden md:inline text-sm text-gray-500">| Universidad Pontificia Bolivariana</span>
           </div>
           
           <div className="hidden sm:flex items-center space-x-2 ml-8">
