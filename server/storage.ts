@@ -71,7 +71,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllBuildings(): Promise<Building[]> {
-    return await db.select().from(buildings);
+    // Ya no trabajamos con edificios, solo con componentes individuales
+    return [];
   }
 
   async getBuilding(id: string): Promise<Building | undefined> {

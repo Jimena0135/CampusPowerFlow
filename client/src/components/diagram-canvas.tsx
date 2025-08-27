@@ -1,13 +1,15 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { Stage, Layer, Line, Transformer } from "react-konva";
 import BuildingBlock from "./building-block";
 import { ElectricalSymbols } from "./electrical-symbols";
 import DraggableComponent from "./draggable-component";
+import { ComponentDataConfig } from "./component-data-config";
 import ResizableBarra from "./resizable-barra";
-import CargaDashboard from "./carga-dashboard";
+import DynamicDashboard from "./dynamic-dashboard";
 import { Button } from "@/components/ui/button";
-import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Trash2, X, Edit3, Lock } from "lucide-react";
+import { MousePointer, Move, Link, ZoomIn, ZoomOut, Maximize2, Minimize2, Trash2, X, Edit3, Lock, Plus, Minus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useResponsiveCanvas } from "@/hooks/use-responsive-canvas";
 import type { Building } from "@shared/schema";
 
 interface DraggableItem {
@@ -37,6 +39,7 @@ interface DiagramCanvasProps {
 }
 
 export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeActive }: DiagramCanvasProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [tool, setTool] = useState<"select" | "move" | "connect" | "edit" | "lock">("select");
   const [zoomLevel, setZoomLevel] = useState(100);
   const [gridEnabled, setGridEnabled] = useState(true);
@@ -47,9 +50,37 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState<string | null>(null);
-  const [editingComponent, setEditingComponent] = useState<{ id: string; label: string } | null>(null);
+  const [editingLabel, setEditingLabel] = useState<null | { id: string; value: string; left: number; top: number; width: number; height: number }>(null);
+
   const stageRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Hook responsivo para dimensiones automáticas
+  const canvasDimensions = useResponsiveCanvas(containerRef);
+
+  // Atajos de teclado para tamaño de componentes
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Plus: Aumentar tamaño de todos los componentes
+      if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '=')) {
+        e.preventDefault();
+        if (!isLocked && droppedComponents.some(c => c.type !== "barras")) {
+          handleIncreaseAllComponentsSize();
+        }
+      }
+      // Ctrl/Cmd + Minus: Reducir tamaño de todos los componentes
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault();
+        if (!isLocked && droppedComponents.some(c => c.type !== "barras")) {
+          handleDecreaseAllComponentsSize();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLocked, droppedComponents]);
 
   const handleZoomIn = () => {
     setZoomLevel(prev => Math.min(prev + 25, 400));
@@ -74,14 +105,14 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       
       const newComponent: DraggableItem = {
         id: `component-${Date.now()}`,
-        type: data.componentId,
-        symbol: data.componentSymbol,
+        type: data.componentId === "busbar" ? "barras" : data.componentId, // Mapear busbar a barras
+        symbol: data.componentId, // Guardar solo el id/tipo
         name: data.componentName,
         label: data.componentName,
         x: x - 25, // Center the component
         y: y - 25,
-        width: data.componentId === "barras" ? 80 : undefined,
-        height: data.componentId === "barras" ? 20 : undefined
+        width: (data.componentId === "busbar" || data.componentId === "barras") ? 60 : 50, // Tamaño inicial para componentes
+        height: (data.componentId === "busbar" || data.componentId === "barras") ? 15 : 50 // Tamaño inicial para componentes
       };
       
       setDroppedComponents(prev => [...prev, newComponent]);
@@ -110,37 +141,83 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     return [fromX, fromY, midX, fromY, midX, toY, toX, toY];
   };
 
+  // Función para calcular el punto de conexión más cercano en una barra
+  const getClosestBarConnectionPoint = (barComponent: DraggableItem, targetX: number, targetY: number, isSource: boolean = false) => {
+    const barWidth = barComponent.width || 60;
+    const barHeight = barComponent.height || 10;
+    const barY = barComponent.y;
+    const barX = barComponent.x;
+    // Puntos de conexión en la parte inferior de la barra
+    const numPoints = Math.max(3, Math.floor(barWidth / 15)); // Mínimo 3 puntos, uno cada 15px
+    const spacing = barWidth / (numPoints - 1);
+    let closestX = barX - barWidth/2;
+    let minDistance = Infinity;
+    for (let i = 0; i < numPoints; i++) {
+      const pointX = barX - barWidth/2 + i * spacing;
+      const distance = Math.abs(pointX - targetX);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestX = pointX;
+      }
+    }
+    // y: parte inferior de la barra
+    return {
+      x: closestX,
+      y: barY + barHeight/2 + 6 // 6px debajo de la barra
+    };
+  };
+
   const updateConnectionsForComponents = (components: DraggableItem[]) => {
     setConnections(prev => prev.map(connection => {
       const fromComponent = components.find(c => c.id === connection.from);
       const toComponent = components.find(c => c.id === connection.to);
       
       if (fromComponent && toComponent) {
-        const fromCenterX = fromComponent.x + (fromComponent.width ? fromComponent.width / 2 : 25);
-        const fromCenterY = fromComponent.y + (fromComponent.height ? fromComponent.height / 2 : 25);
-        const toCenterX = toComponent.x + (toComponent.width ? toComponent.width / 2 : 25);
-        const toCenterY = toComponent.y + (toComponent.height ? toComponent.height / 2 : 25);
+        let fromConnectionX, fromConnectionY, toConnectionX, toConnectionY;
         
-        // Calculate connection points at component edges for straight lines
-        const dx = toCenterX - fromCenterX;
-        const dy = toCenterY - fromCenterY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 0) {
-          // Use center points for cleaner connections
-          const fromConnectionX = fromCenterX;
-          const fromConnectionY = fromCenterY;
-          const toConnectionX = toCenterX;
-          const toConnectionY = toCenterY;
-          
-          // Create 90-degree angle routing from center to center
-          const points = create90DegreeRoute(fromConnectionX, fromConnectionY, toConnectionX, toConnectionY);
-          
-          return {
-            ...connection,
-            points
-          };
+        if (fromComponent.type === "barras") {
+          // Para barras: calcular el punto de conexión más cercano al destino
+          const targetX = toComponent.type === "barras" 
+            ? toComponent.x + (toComponent.width || 60) / 2 
+            : toComponent.x;
+          const targetY = toComponent.type === "barras" 
+            ? toComponent.y + (toComponent.height || 10) / 2 
+            : toComponent.y - 10;
+            
+          const connectionPoint = getClosestBarConnectionPoint(fromComponent, targetX, targetY, true);
+          fromConnectionX = connectionPoint.x;
+          fromConnectionY = connectionPoint.y;
+        } else {
+          // Para otros componentes: usar la parte superior central del símbolo
+          fromConnectionX = fromComponent.x;
+          fromConnectionY = fromComponent.y - (fromComponent.height || 50) / 4; // Parte superior del símbolo escalado
         }
+        
+        if (toComponent.type === "barras") {
+          // Para barras: calcular el punto de conexión más cercano al origen
+          const sourceX = fromComponent.type === "barras" 
+            ? fromConnectionX 
+            : fromComponent.x;
+          const sourceY = fromComponent.type === "barras" 
+            ? fromConnectionY 
+            : fromComponent.y - (fromComponent.height || 50) / 4;
+            
+          const connectionPoint = getClosestBarConnectionPoint(toComponent, sourceX, sourceY, false);
+          toConnectionX = connectionPoint.x;
+          toConnectionY = connectionPoint.y;
+        } else {
+          // Para otros componentes: usar la parte superior central del símbolo
+          toConnectionX = toComponent.x;
+          toConnectionY = toComponent.y - (toComponent.height || 50) / 4; // Parte superior del símbolo escalado
+        }
+        
+        // Create 90-degree angle routing between connection points
+        const points = create90DegreeRoute(fromConnectionX, fromConnectionY, toConnectionX, toConnectionY);
+        
+        return {
+          ...connection,
+          points
+        };
       }
       return connection;
     }));
@@ -165,13 +242,101 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   };
 
   const handleStartEditingLabel = (id: string, currentLabel: string) => {
-    setEditingComponent({ id, label: currentLabel });
+    // Find the component to get its position and size
+    const comp = droppedComponents.find(c => c.id === id);
+    if (comp) {
+      setEditingLabel({
+        id,
+        value: currentLabel,
+        left: comp.x - (comp.width || 50) / 2,
+        top: comp.y + (comp.height || 50) / 2 + 8,
+        width: (comp.width || 50) + 20,
+        height: 28
+      });
+    }
   };
 
   const handleComponentResize = (id: string, width: number, height: number) => {
     setDroppedComponents(prev => 
       prev.map(comp => comp.id === id ? { ...comp, width, height } : comp)
     );
+  };
+
+  const handleIncreaseComponentSize = () => {
+    if (selectedComponent) {
+      const component = droppedComponents.find(c => c.id === selectedComponent);
+      if (component) {
+        // Permitir estiramiento horizontal para barras
+        const isBarra = component.type === "barras" || component.type === "barra_colectora";
+        const maxWidth = isBarra ? 300 : 100;
+        const maxHeight = isBarra ? 30 : 100;
+        const newWidth = Math.min((component.width || 60) + 20, maxWidth);
+        const newHeight = isBarra ? (component.height || 15) : Math.min((component.height || 50) + 10, maxHeight);
+        handleComponentResize(selectedComponent, newWidth, newHeight);
+      }
+    }
+  };
+
+  const handleDecreaseComponentSize = () => {
+    if (selectedComponent) {
+      const component = droppedComponents.find(c => c.id === selectedComponent);
+      if (component) {
+        // Permitir reducción horizontal para barras
+        const isBarra = component.type === "barras" || component.type === "barra_colectora";
+        const minWidth = isBarra ? 40 : 20;
+        const minHeight = isBarra ? 8 : 20;
+        const newWidth = Math.max((component.width || 60) - 20, minWidth);
+        const newHeight = isBarra ? (component.height || 15) : Math.max((component.height || 50) - 10, minHeight);
+        handleComponentResize(selectedComponent, newWidth, newHeight);
+      }
+    }
+  };
+
+  const handleIncreaseAllComponentsSize = () => {
+    setDroppedComponents(prev => 
+      prev.map(comp => {
+        if (comp.type !== "barras") {
+          const newWidth = Math.min((comp.width || 50) + 10, 120);
+          const newHeight = Math.min((comp.height || 50) + 10, 120);
+          return { ...comp, width: newWidth, height: newHeight };
+        }
+        return comp;
+      })
+    );
+    
+    // Actualizar conexiones después del cambio de tamaño
+    setTimeout(() => updateConnectionsForComponents(droppedComponents), 100);
+    
+    toast({
+      title: "Tamaño aumentado",
+      description: "Todos los componentes han sido aumentados de tamaño",
+    });
+  };
+
+  const handleDecreaseAllComponentsSize = () => {
+    setDroppedComponents(prev => 
+      prev.map(comp => {
+        if (comp.type !== "barras") {
+          const newWidth = Math.max((comp.width || 50) - 10, 20);
+          const newHeight = Math.max((comp.height || 50) - 10, 20);
+          return { ...comp, width: newWidth, height: newHeight };
+        }
+        return comp;
+      })
+    );
+    
+    // Actualizar conexiones después del cambio de tamaño
+    setTimeout(() => updateConnectionsForComponents(droppedComponents), 100);
+    
+    toast({
+      title: "Tamaño reducido",
+      description: "Todos los componentes han sido reducidos de tamaño",
+    });
+  };
+
+  // Función para verificar si un componente está conectado
+  const isComponentConnected = (componentId: string): boolean => {
+    return connections.some((conn: Connection) => conn.from === componentId || conn.to === componentId);
   };
 
   const clearAllComponents = () => {
@@ -200,14 +365,50 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         const toComponent = droppedComponents.find(c => c.id === componentId);
         
         if (fromComponent && toComponent) {
+          // Calcular puntos de conexión correctos
+          let fromX, fromY, toX, toY;
+          
+          if (fromComponent.type === "barras") {
+            // Para barras: calcular el punto de conexión más cercano al destino
+            const targetX = toComponent.type === "barras" 
+              ? toComponent.x + (toComponent.width || 60) / 2 
+              : toComponent.x;
+            const targetY = toComponent.type === "barras" 
+              ? toComponent.y + (toComponent.height || 10) / 2 
+              : toComponent.y - (toComponent.height || 50) / 4;
+              
+            const connectionPoint = getClosestBarConnectionPoint(fromComponent, targetX, targetY, true);
+            fromX = connectionPoint.x;
+            fromY = connectionPoint.y;
+          } else {
+            // Para otros componentes: usar la parte superior central del símbolo
+            fromX = fromComponent.x;
+            fromY = fromComponent.y - (fromComponent.height || 50) / 4; // Parte superior del símbolo escalado
+          }
+          
+          if (toComponent.type === "barras") {
+            // Para barras: calcular el punto de conexión más cercano al origen
+            const sourceX = fromComponent.type === "barras" 
+              ? fromX 
+              : fromComponent.x;
+            const sourceY = fromComponent.type === "barras" 
+              ? fromY 
+              : fromComponent.y - (fromComponent.height || 50) / 4;
+              
+            const connectionPoint = getClosestBarConnectionPoint(toComponent, sourceX, sourceY, false);
+            toX = connectionPoint.x;
+            toY = connectionPoint.y;
+          } else {
+            // Para otros componentes: usar la parte superior central del símbolo
+            toX = toComponent.x;
+            toY = toComponent.y - (toComponent.height || 50) / 4; // Parte superior del símbolo escalado
+          }
+          
           const newConnection: Connection = {
             id: `connection-${Date.now()}`,
             from: connectingFrom,
             to: componentId,
-            points: [
-              fromComponent.x + 25, fromComponent.y + 25,
-              toComponent.x + 25, toComponent.y + 25
-            ]
+            points: create90DegreeRoute(fromX, fromY, toX, toY)
           };
           
           setConnections(prev => [...prev, newConnection]);
@@ -225,23 +426,38 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
     }
   };
 
-  const handleComponentDoubleClick = (componentId: string, componentType: string) => {
-    console.log('Double click detected:', componentId, componentType); // Debug log
-    if (componentType === "carga" || componentType === "load") {
+  // Doble clic: si es sobre el label, activar edición; si es sobre el símbolo, abrir dashboard
+  const handleComponentDoubleClick = (componentId: string, componentType: string, target?: string) => {
+    if (target === 'label') {
+      // Buscar el componente y su label actual
+      const comp = droppedComponents.find(c => c.id === componentId);
+      if (comp) {
+        setEditingLabel({
+          id: componentId,
+          value: comp.label || comp.name,
+          left: comp.x - (comp.width || 50) / 2,
+          top: comp.y + (comp.height || 50) / 2 + 8,
+          width: (comp.width || 50) + 20,
+          height: 28
+        });
+      }
+    } else {
+      // Por defecto, abrir dashboard
       setShowDashboard(componentId);
       toast({
         title: "Dashboard abierto",
-        description: `Mostrando dashboard para ${droppedComponents.find(c => c.id === componentId)?.label || "Carga"}`,
+        description: `Mostrando dashboard para ${droppedComponents.find(c => c.id === componentId)?.label || componentType}`,
       });
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-100 relative">
+    <div className={`flex-1 flex flex-col bg-gray-100 relative${isFullscreen ? ' fixed inset-0 z-50 bg-black' : ''}`}> 
       {/* Canvas Toolbar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
+      {!isFullscreen && (
+        <div className="bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center space-x-1 sm:space-x-4">
+          <div className="flex items-center space-x-1 sm:space-x-2">
             <Button
               variant={tool === "select" ? "default" : "ghost"}
               size="sm"
@@ -250,6 +466,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <MousePointer className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Seleccionar</span>
             </Button>
             <Button
               variant={tool === "move" ? "default" : "ghost"}
@@ -259,6 +476,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <Move className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Mover</span>
             </Button>
             <Button
               variant={tool === "connect" ? "default" : "ghost"}
@@ -268,6 +486,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               disabled={isLocked}
             >
               <Link className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Conectar</span>
             </Button>
             <Button
               variant={tool === "edit" ? "default" : "ghost"}
@@ -279,6 +498,7 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               title="Modo Edición"
             >
               <Edit3 className="w-4 h-4" />
+              <span className="hidden lg:inline ml-1">Editar</span>
             </Button>
             <Button
               variant={isLocked ? "default" : "ghost"}
@@ -304,6 +524,10 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
             >
               <Lock className="w-4 h-4" />
             </Button>
+            {/* Botón de pantalla completa */}
+            <Button variant="ghost" size="sm" onClick={() => setIsFullscreen(true)} title="Pantalla Completa">
+              <Maximize2 className="w-4 h-4" />
+            </Button>
           </div>
           
           <div className="w-px h-6 bg-gray-300"></div>
@@ -320,6 +544,67 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
               <Maximize2 className="w-4 h-4" />
             </Button>
           </div>
+          
+          {/* Component Size Controls */}
+          {selectedComponent && droppedComponents.find(c => c.id === selectedComponent)?.type !== "barras" && (
+            <>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Tamaño:</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleDecreaseComponentSize}
+                  title="Reducir Tamaño"
+                  disabled={isLocked}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <span className="text-xs text-gray-500 min-w-[40px] text-center">
+                  {droppedComponents.find(c => c.id === selectedComponent)?.width || 50}×{droppedComponents.find(c => c.id === selectedComponent)?.height || 50}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleIncreaseComponentSize}
+                  title="Aumentar Tamaño"
+                  disabled={isLocked}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </>
+          )}
+          
+          {/* Global Component Size Controls */}
+          {droppedComponents.some(c => c.type !== "barras") && (
+            <>
+              <div className="w-px h-6 bg-gray-300"></div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Todos:</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleDecreaseAllComponentsSize}
+                  title="Reducir Tamaño de Todos los Componentes (Ctrl+-)"
+                  disabled={isLocked || droppedComponents.length === 0}
+                >
+                  <Minus className="w-4 h-4" />
+                  <span className="hidden lg:inline ml-1">Reducir</span>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleIncreaseAllComponentsSize}
+                  title="Aumentar Tamaño de Todos los Componentes (Ctrl++)"
+                  disabled={isLocked || droppedComponents.length === 0}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden lg:inline ml-1">Aumentar</span>
+                </Button>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="flex items-center space-x-4">
@@ -356,10 +641,22 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
             </Button>
           </div>
         </div>
-      </div>
+        </div>
+      )}
+      {/* Botón para salir de pantalla completa */}
+      {isFullscreen && (
+        <button
+          className="absolute top-4 right-4 z-50 bg-white rounded-full shadow p-2 border border-gray-300 hover:bg-gray-100 transition"
+          onClick={() => setIsFullscreen(false)}
+          title="Salir de Pantalla Completa"
+        >
+          <Minimize2 className="w-6 h-6 text-gray-700" />
+        </button>
+      )}
 
       {/* Main Diagram Canvas */}
       <div 
+        ref={containerRef}
         className="flex-1 relative overflow-hidden"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -376,32 +673,37 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
         )}
         
         {/* Drop zone indicator */}
-        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 z-10">
           <div className="flex items-center space-x-2">
             <span>📋</span>
-            <span>Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+            <span className="hidden sm:inline">Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+            <span className="sm:hidden">Arrastra símbolos aquí</span>
           </div>
         </div>
         
         {/* Component count indicator */}
         {droppedComponents.length > 0 && (
-          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700">
-            {droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama
+          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700 z-10">
+            <span className="hidden sm:inline">{droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama</span>
+            <span className="sm:hidden">{droppedComponents.length} comp.</span>
           </div>
         )}
         
         {/* Konva Stage for electrical diagram */}
         <Stage
           ref={stageRef}
-          width={window.innerWidth}
-          height={window.innerHeight - 120} // Account for header and toolbar
+          width={canvasDimensions.width}
+          height={canvasDimensions.height}
           scaleX={zoomLevel / 100}
           scaleY={zoomLevel / 100}
           draggable={tool === "move"}
           onClick={(e) => {
-            // Only deselect if clicking on empty canvas
+            // Click en área vacía deselecciona
             if (e.target === e.target.getStage()) {
               setSelectedComponent(null);
+              if (tool === "connect") {
+                setConnectingFrom(null);
+              }
             }
           }}
         >
@@ -412,10 +714,38 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                 key={connection.id}
                 points={connection.points}
                 stroke="#374151"
-                strokeWidth={2}
+                strokeWidth={4} // Líneas más gruesas
                 lineCap="square"
                 lineJoin="miter"
                 tension={0}
+                onClick={(e) => {
+                  e.evt.stopPropagation();
+                  if (tool === "select") {
+                    // Mostrar opción de eliminar conexión
+                    const confirmDelete = window.confirm("¿Eliminar esta conexión?");
+                    if (confirmDelete) {
+                      setConnections(prev => prev.filter(conn => conn.id !== connection.id));
+                      toast({
+                        title: "Conexión eliminada",
+                        description: "La conexión ha sido eliminada del diagrama",
+                      });
+                    }
+                  }
+                }}
+                onTap={(e) => {
+                  e.evt.stopPropagation();
+                  if (tool === "select") {
+                    // Mostrar opción de eliminar conexión en dispositivos táctiles
+                    const confirmDelete = window.confirm("¿Eliminar esta conexión?");
+                    if (confirmDelete) {
+                      setConnections(prev => prev.filter(conn => conn.id !== connection.id));
+                      toast({
+                        title: "Conexión eliminada",
+                        description: "La conexión ha sido eliminada del diagrama",
+                      });
+                    }
+                  }
+                }}
               />
             ))}
             
@@ -430,9 +760,10 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   label={component.label}
                   x={component.x}
                   y={component.y}
-                  width={component.width || 80}
-                  height={component.height || 20}
+                  width={component.width || 60} // Ancho por defecto más pequeño
+                  height={component.height || 10} // Altura por defecto más pequeña
                   isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
+                  isDragEnabled={tool === "move"}
                   onSelect={() => {
                     if (!isLocked) {
                       setSelectedComponent(component.id);
@@ -476,7 +807,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   label={component.label}
                   x={component.x}
                   y={component.y}
+                  width={component.width || 50}
+                  height={component.height || 50}
                   isSelected={!isLocked && (selectedComponent === component.id || connectingFrom === component.id)}
+                  isDragEnabled={tool === "move"}
+                  isConnected={isComponentConnected(component.id)}
                   onSelect={() => {
                     if (!isLocked) {
                       setSelectedComponent(component.id);
@@ -486,6 +821,11 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                   onDragEnd={(x, y) => {
                     if (!isLocked) {
                       handleComponentDragEnd(component.id, x, y);
+                    }
+                  }}
+                  onResize={(width, height) => {
+                    if (!isLocked) {
+                      handleComponentResize(component.id, width, height);
                     }
                   }}
                   onDelete={() => {
@@ -508,8 +848,18 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
                       handleComponentClick(component.id, component.type);
                     }
                   }}
-                  onDoubleClick={() => handleComponentDoubleClick(component.id, component.type)}
+                  // Doble clic sobre el símbolo abre dashboard, sobre el label activa edición
+                  onDoubleClick={e => {
+                    if (e && e.target && e.target.className && typeof e.target.className === 'string' && e.target.className.includes('component-label')) {
+                      handleComponentDoubleClick(component.id, component.type, 'label');
+                    } else {
+                      handleComponentDoubleClick(component.id, component.type);
+                    }
+                  }}
                   isLocked={isLocked}
+                  onRename={(id, newName) => {
+                    setDroppedComponents(prev => prev.map(comp => comp.id === id ? { ...comp, label: newName } : comp));
+                  }}
                 />
               )
             ))}
@@ -518,59 +868,51 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
       </div>
       
       {/* Dashboard Modal */}
-      {showDashboard && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-[900px] h-[700px] relative overflow-y-auto">
-            <button
-              onClick={() => setShowDashboard(null)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <CargaDashboard 
-              cargaId={showDashboard}
-              cargaName={droppedComponents.find(c => c.id === showDashboard)?.label || "Carga"}
-              onClose={() => setShowDashboard(null)}
-            />
-          </div>
-        </div>
-      )}
+      {showDashboard && (() => {
+        const comp = droppedComponents.find(c => c.id === showDashboard);
+        if (!comp) return null;
+        
+        return (
+          <DynamicDashboard
+            componentId={comp.id}
+            onClose={() => setShowDashboard(null)}
+          />
+        );
+      })()}
 
-      {/* Label Editing Modal */}
-      {editingComponent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-80">
-            <h3 className="text-lg font-semibold mb-4">Editar Etiqueta</h3>
-            <input
-              value={editingComponent.label}
-              onChange={(e) => setEditingComponent({ ...editingComponent, label: e.target.value })}
-              placeholder="Ingrese la etiqueta del componente"
-              className="w-full p-2 border border-gray-300 rounded mb-4"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleComponentLabelUpdate(editingComponent.id, editingComponent.label);
-                } else if (e.key === 'Escape') {
-                  setEditingComponent(null);
-                }
-              }}
-            />
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => handleComponentLabelUpdate(editingComponent.id, editingComponent.label)} 
-                className="flex-1 bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-              >
-                Guardar
-              </button>
-              <button 
-                onClick={() => setEditingComponent(null)} 
-                className="flex-1 bg-gray-300 text-gray-700 p-2 rounded hover:bg-gray-400"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Edición de nombre superpuesta sobre el canvas */}
+      {editingLabel && (
+        <input
+          style={{
+            position: 'absolute',
+            left: editingLabel.left * (zoomLevel / 100),
+            top: editingLabel.top * (zoomLevel / 100),
+            width: editingLabel.width * (zoomLevel / 100),
+            height: editingLabel.height,
+            fontSize: 16,
+            fontWeight: 'bold',
+            zIndex: 100,
+            background: '#fff',
+            border: '1px solid #D1D5DB',
+            borderRadius: 4,
+            padding: '2px 6px',
+          }}
+          value={editingLabel.value}
+          onChange={e => setEditingLabel({ ...editingLabel, value: e.target.value })}
+          onBlur={() => {
+            setDroppedComponents(prev => prev.map(comp => comp.id === editingLabel.id ? { ...comp, label: editingLabel.value } : comp));
+            setEditingLabel(null);
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              setDroppedComponents(prev => prev.map(comp => comp.id === editingLabel.id ? { ...comp, label: editingLabel.value } : comp));
+              setEditingLabel(null);
+            } else if (e.key === 'Escape') {
+              setEditingLabel(null);
+            }
+          }}
+          autoFocus
+        />
       )}
     </div>
   );

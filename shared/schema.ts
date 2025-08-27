@@ -59,12 +59,27 @@ export const electricalComponents = pgTable("electrical_components", {
   symbol: text("symbol").notNull(), // Emoji or symbol reference
   name: text("name").notNull(),
   label: text("label"), // Custom user label
+  uniqueIdentifier: text("unique_identifier"), // Identificador único editable por el usuario
   description: text("description"),
   category: text("category").notNull(), // 'load', 'power_equipment', 'renewable', 'storage', 'distribution'
   positionX: real("position_x").notNull().default(0),
   positionY: real("position_y").notNull().default(0),
   buildingId: varchar("building_id").references(() => buildings.id),
+  // Configuración de consultas SQL
+  sqlQuery: text("sql_query"), // Consulta SQL personalizada para este componente
+  dataSourceType: text("data_source_type").default('fiware'), // 'fiware', 'custom_sql', 'simulated'
+  refreshInterval: integer("refresh_interval").default(10), // Intervalo de actualización en segundos
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const componentData = pgTable("component_data", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  componentId: varchar("component_id").notNull().references(() => electricalComponents.id),
+  dataKey: text("data_key").notNull(), // 'voltage', 'current', 'power', 'temperature', etc.
+  dataValue: real("data_value").notNull(),
+  dataUnit: text("data_unit"), // 'V', 'A', 'W', 'C', etc.
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
 // Relations
@@ -96,10 +111,66 @@ export const alertsRelations = relations(alerts, ({ one }) => ({
   }),
 }));
 
-export const electricalComponentsRelations = relations(electricalComponents, ({ one }) => ({
+export const electricalComponentsRelations = relations(electricalComponents, ({ one, many }) => ({
   building: one(buildings, {
     fields: [electricalComponents.buildingId],
     references: [buildings.id],
+  }),
+  componentData: many(componentData),
+}));
+
+export const componentDataRelations = relations(componentData, ({ one }) => ({
+  component: one(electricalComponents, {
+    fields: [componentData.componentId],
+    references: [electricalComponents.id],
+  }),
+}));
+
+// Nuevas tablas para el sistema de dashboards dinámicos
+export const dashboards = pgTable("dashboards", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  layout: text("layout").notNull().default('grid'), // 'grid', 'flex'
+  columns: integer("columns").notNull().default(4),
+  componentId: varchar("component_id").references(() => electricalComponents.id),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const dashboardWidgets = pgTable("dashboard_widgets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  dashboardId: varchar("dashboard_id").notNull().references(() => dashboards.id, { onDelete: 'cascade' }),
+  type: text("type").notNull(), // 'chart', 'metric', 'gauge', 'table'
+  title: text("title").notNull(),
+  dataSource: text("data_source").notNull(), // 'crate', 'postgres', 'api'
+  sqlQuery: text("sql_query"), // Consulta SQL para obtener datos
+  chartType: text("chart_type"), // 'line', 'bar', 'pie', 'area', 'gauge'
+  dataColumns: text("data_columns"), // JSON con configuración de columnas
+  position: integer("position").notNull().default(0),
+  width: integer("width").notNull().default(1), // Grid width
+  height: integer("height").notNull().default(1), // Grid height
+  refreshInterval: integer("refresh_interval").notNull().default(30), // seconds
+  isVisible: boolean("is_visible").notNull().default(true),
+  config: text("config"), // JSON con configuración adicional del widget
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Relaciones para dashboards
+export const dashboardsRelations = relations(dashboards, ({ one, many }) => ({
+  component: one(electricalComponents, {
+    fields: [dashboards.componentId],
+    references: [electricalComponents.id],
+  }),
+  widgets: many(dashboardWidgets),
+}));
+
+export const dashboardWidgetsRelations = relations(dashboardWidgets, ({ one }) => ({
+  dashboard: one(dashboards, {
+    fields: [dashboardWidgets.dashboardId],
+    references: [dashboards.id],
   }),
 }));
 
@@ -134,6 +205,23 @@ export const insertElectricalComponentSchema = createInsertSchema(electricalComp
   createdAt: true,
 });
 
+export const insertComponentDataSchema = createInsertSchema(componentData).omit({
+  id: true,
+  timestamp: true,
+});
+
+export const insertDashboardSchema = createInsertSchema(dashboards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDashboardWidgetSchema = createInsertSchema(dashboardWidgets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -152,3 +240,12 @@ export type Alert = typeof alerts.$inferSelect;
 
 export type InsertElectricalComponent = z.infer<typeof insertElectricalComponentSchema>;
 export type ElectricalComponent = typeof electricalComponents.$inferSelect;
+
+export type InsertComponentData = z.infer<typeof insertComponentDataSchema>;
+export type ComponentData = typeof componentData.$inferSelect;
+
+export type InsertDashboard = z.infer<typeof insertDashboardSchema>;
+export type Dashboard = typeof dashboards.$inferSelect;
+
+export type InsertDashboardWidget = z.infer<typeof insertDashboardWidgetSchema>;
+export type DashboardWidget = typeof dashboardWidgets.$inferSelect;

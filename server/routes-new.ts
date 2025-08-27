@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { fiwareConnector } from "./fiware-connector";
 import { componentQueryService } from "./component-query-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -103,6 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data);
         
         if (message.type === 'subscribe') {
+          // Suscribirse a actualizaciones de datos específicos
           ws.send(JSON.stringify({
             type: 'subscribed',
             message: `Subscribed to ${message.componentId} updates`

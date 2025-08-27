@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+import { useFiwareData } from "./use-fiware-data";
 import type { Building, ElectricalData, EnvironmentalData } from "@shared/schema";
 
 export function useElectricalData() {
@@ -7,6 +8,9 @@ export function useElectricalData() {
   const [cachedElectricalData, setCachedElectricalData] = useState<Map<string, ElectricalData>>(new Map());
   const [cachedEnvironmentalData, setCachedEnvironmentalData] = useState<Map<string, EnvironmentalData>>(new Map());
   const [cachedHistoryData, setCachedHistoryData] = useState<Map<string, ElectricalData[]>>(new Map());
+  
+  // Hook para datos de FIWARE
+  const fiwareData = useFiwareData();
 
   // Fetch all buildings
   const { data: buildings, isLoading: buildingsLoading } = useQuery<Building[]>({
@@ -41,12 +45,43 @@ export function useElectricalData() {
     }
   }, [buildings]);
 
-  // Helper functions to get cached data
+  // Helper functions to get data (prioritizing FIWARE when available)
   const getLatestElectricalData = (buildingId: string): ElectricalData | undefined => {
+    // Primero intentar obtener datos de FIWARE
+    const fiwareElectrical = fiwareData.getCachedFiwareElectricalData(buildingId);
+    if (fiwareElectrical) {
+      return {
+        id: `fiware_${buildingId}_${Date.now()}`,
+        buildingId: fiwareElectrical.buildingId,
+        voltage: fiwareElectrical.voltage,
+        current: fiwareElectrical.current,
+        power: fiwareElectrical.power,
+        powerFactor: fiwareElectrical.powerFactor,
+        frequency: fiwareElectrical.frequency,
+        thd: fiwareElectrical.thd,
+        timestamp: new Date(fiwareElectrical.timestamp),
+      };
+    }
+    
+    // Fallback a datos locales
     return cachedElectricalData.get(buildingId);
   };
 
   const getLatestEnvironmentalData = (buildingId: string): EnvironmentalData | undefined => {
+    // Primero intentar obtener datos de FIWARE
+    const fiwareEnvironmental = fiwareData.getCachedFiwareEnvironmentalData(buildingId);
+    if (fiwareEnvironmental) {
+      return {
+        id: `fiware_env_${buildingId}_${Date.now()}`,
+        buildingId: fiwareEnvironmental.buildingId,
+        temperature: fiwareEnvironmental.temperature,
+        humidity: fiwareEnvironmental.humidity,
+        illumination: fiwareEnvironmental.illumination,
+        timestamp: new Date(fiwareEnvironmental.timestamp),
+      };
+    }
+    
+    // Fallback a datos locales
     return cachedEnvironmentalData.get(buildingId);
   };
 
@@ -99,5 +134,13 @@ export function useElectricalData() {
     updateEnvironmentalData,
     cachedElectricalData: Object.fromEntries(cachedElectricalData),
     cachedEnvironmentalData: Object.fromEntries(cachedEnvironmentalData),
+    
+    // FIWARE integration
+    fiwareData,
+    getFiwareTimeSeriesData: fiwareData.getTimeSeriesData,
+    fiwareEntities: fiwareData.fiwareEntities,
+    isFiwareDataAvailable: (buildingId: string) => {
+      return !!(fiwareData.getCachedFiwareElectricalData(buildingId) || fiwareData.getCachedFiwareEnvironmentalData(buildingId));
+    },
   };
 }

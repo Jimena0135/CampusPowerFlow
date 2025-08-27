@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { X, Zap, Gauge, TrendingUp, TrendingDown, BarChart3, Activity, Thermometer } from "lucide-react";
+import { X, Zap, Gauge, TrendingUp, TrendingDown, BarChart3, Activity, Thermometer, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
+import ComponentQueryManager from "./simple-query-dialog";
 
 interface CargaDashboardProps {
   cargaId: string;
@@ -11,6 +12,8 @@ interface CargaDashboardProps {
 }
 
 export default function CargaDashboard({ cargaId, cargaName, onClose }: CargaDashboardProps) {
+  const [showQueryDialog, setShowQueryDialog] = useState(false);
+  
   // Datos en tiempo real para la carga
   const [electricalData, setElectricalData] = useState({
     voltage: 220.5,
@@ -104,13 +107,26 @@ export default function CargaDashboard({ cargaId, cargaName, onClose }: CargaDas
   return (
     <div className="h-full overflow-y-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          Dashboard - {cargaName}
-        </h2>
-        <p className="text-gray-600">
-          Monitoreo en tiempo real de la carga eléctrica
-        </p>
+      <div className="mb-6 flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-800 mb-2">
+            Dashboard - {cargaName}
+          </h2>
+          <p className="text-gray-600">
+            Monitoreo en tiempo real de la carga eléctrica
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowQueryDialog(true)}
+            className="flex items-center space-x-2"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Configurar Consultas</span>
+          </Button>
+        </div>
       </div>
 
       {/* Main Metrics Grid */}
@@ -413,6 +429,14 @@ export default function CargaDashboard({ cargaId, cargaName, onClose }: CargaDas
           </CardContent>
         </Card>
       </div>
+
+      {/* Component Query Configuration Dialog */}
+      <ComponentQueryManager
+        componentId={cargaId}
+        componentName={cargaName}
+        isOpen={showQueryDialog}
+        onClose={() => setShowQueryDialog(false)}
+      />
     </div>
   );
 }
