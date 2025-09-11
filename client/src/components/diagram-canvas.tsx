@@ -51,6 +51,8 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<null | { id: string; value: string; left: number; top: number; width: number; height: number }>(null);
+  // Nuevo estado para contar el total de componentes agregados alguna vez
+  const [totalAdded, setTotalAdded] = useState(0);
 
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +60,12 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
 
   // Hook responsivo para dimensiones automáticas
   const canvasDimensions = useResponsiveCanvas(containerRef);
+
+  // Suma al total cada vez que se agrega un componente
+  useEffect(() => {
+    // Si droppedComponents aumenta, sumar la diferencia
+    setTotalAdded(prev => prev + Math.max(0, droppedComponents.length - prev));
+  }, [droppedComponents]);
 
   // Atajos de teclado para tamaño de componentes
   useEffect(() => {
@@ -672,16 +680,22 @@ export default function DiagramCanvas({ buildings, onBuildingClick, isRealTimeAc
           />
         )}
         
-        {/* Drop zone indicator */}
-        <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 z-10">
-          <div className="flex items-center space-x-2">
-            <span>📋</span>
-            <span className="hidden sm:inline">Arrastra símbolos aquí para construir tu diagrama unifilar</span>
-            <span className="sm:hidden">Arrastra símbolos aquí</span>
+        {/* Drop zone indicator y mensajes condicionales */}
+        {droppedComponents.length === 0 && totalAdded === 0 && (
+          <div className="absolute top-4 left-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 z-10">
+            <div className="flex items-center space-x-2">
+              <span>📋</span>
+              <span className="hidden sm:inline">Arrastra símbolos aquí para construir tu diagrama unifilar</span>
+              <span className="sm:hidden">Arrastra símbolos aquí</span>
+            </div>
           </div>
-        </div>
-        
-        {/* Component count indicator */}
+        )}
+        {droppedComponents.length === 0 && totalAdded > 0 && (
+          <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700 z-10">
+            <span className="hidden sm:inline">{totalAdded} componente{totalAdded !== 1 ? 's' : ''} en el diagrama</span>
+            <span className="sm:hidden">{totalAdded} comp.</span>
+          </div>
+        )}
         {droppedComponents.length > 0 && (
           <div className="absolute top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-2 text-sm text-green-700 z-10">
             <span className="hidden sm:inline">{droppedComponents.length} componente{droppedComponents.length !== 1 ? 's' : ''} en el diagrama</span>

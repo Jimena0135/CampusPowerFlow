@@ -130,20 +130,31 @@ export default function DynamicDashboard({ componentId, onClose }: DynamicDashbo
 
   const createWidget = async () => {
     try {
-      const response = await fetch('/api/dashboard-widgets', {
+      // Ejecutar la consulta SQL usando el endpoint correcto
+      const response = await fetch('/api/dashboard/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newWidget,
-          dashboardId: dashboard?.id,
-          position: widgets.length
-        })
+        body: JSON.stringify({ query: newWidget.sqlQuery })
       });
 
       if (response.ok) {
-        const widget = await response.json();
+        const result = await response.json();
+        // Crear un objeto widget simulado para agregarlo al dashboard localmente
+        const widget = {
+          ...newWidget,
+          id: `widget-${Date.now()}`,
+          data: result.data || [],
+        };
         setWidgets(prev => [...prev, widget]);
-        loadWidgetData(widget);
+        setWidgetData(prev => ({
+          ...prev,
+          [widget.id]: {
+            id: widget.id,
+            data: result.data || [],
+            loading: false,
+            error: null
+          }
+        }));
         setIsAddingWidget(false);
         setNewWidget({
           type: 'chart',
