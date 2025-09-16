@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Settings, Trash2, BarChart3, LineChart, PieChart, Gauge } from "lucide-react";
+import {
+  LineChart as ReLineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
+  BarChart as ReBarChart, Bar,
+  AreaChart as ReAreaChart, Area,
+  PieChart as RePieChart, Pie, Cell, Legend,
+  ResponsiveContainer
+} from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -83,7 +90,7 @@ export default function DynamicDashboard({ componentId, onClose }: DynamicDashbo
     }));
 
     try {
-      const response = await fetch('/api/widgets/execute-query', {
+  const response = await fetch('/api/dashboard/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,20 +137,31 @@ export default function DynamicDashboard({ componentId, onClose }: DynamicDashbo
 
   const createWidget = async () => {
     try {
-      const response = await fetch('/api/dashboard-widgets', {
+      // Ejecutar la consulta SQL usando el endpoint correcto
+      const response = await fetch('/api/dashboard/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newWidget,
-          dashboardId: dashboard?.id,
-          position: widgets.length
-        })
+        body: JSON.stringify({ query: newWidget.sqlQuery })
       });
 
       if (response.ok) {
-        const widget = await response.json();
+        const result = await response.json();
+        // Crear un objeto widget simulado para agregarlo al dashboard localmente
+        const widget = {
+          ...newWidget,
+          id: `widget-${Date.now()}`,
+          data: result.data || [],
+        };
         setWidgets(prev => [...prev, widget]);
-        loadWidgetData(widget);
+        setWidgetData(prev => ({
+          ...prev,
+          [widget.id]: {
+            id: widget.id,
+            data: result.data || [],
+            loading: false,
+            error: null
+          }
+        }));
         setIsAddingWidget(false);
         setNewWidget({
           type: 'chart',
@@ -257,14 +275,66 @@ export default function DynamicDashboard({ componentId, onClose }: DynamicDashbo
   };
 
   const renderChartWidget = (widget: DashboardWidget, data: any[]) => {
-    // Aquí integrarías una librería de gráficos como Chart.js o Recharts
-    return (
-      <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded">
-        <div className="text-center text-gray-500">
-          <BarChart3 className="w-8 h-8 mx-auto mb-2" />
-          <div className="text-sm">Gráfico {widget.chartType}</div>
-          <div className="text-xs">{data.length} registros</div>
+    if (!data || data.length === 0) {
+      return (
+        <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded text-gray-500">
+          Sin datos para graficar
         </div>
+      );
+    }
+
+    // Usar el primer campo como X y el segundo como Y por defecto
+    const keys = Object.keys(data[0]);
+    const xKey = keys[0];
+    const yKey = keys[1];
+    const chartType = widget.chartType || 'line';
+    const colors = ['#3b82f6', '#f59e42', '#10b981', '#ef4444', '#a21caf'];
+
+    return (
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'line' && (
+            <ReLineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xKey} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey={yKey} stroke={colors[0]} dot={false} />
+            </ReLineChart>
+          )}
+          {chartType === 'bar' && (
+            <ReBarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xKey} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey={yKey} fill={colors[1]} />
+            </ReBarChart>
+          )}
+          {chartType === 'area' && (
+            <ReAreaChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xKey} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Area type="monotone" dataKey={yKey} stroke={colors[2]} fill={colors[2]} />
+            </ReAreaChart>
+          )}
+          {chartType === 'pie' && (
+            <RePieChart>
+              <Tooltip />
+              <Legend />
+              <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={60} fill={colors[3]} label>
+                {data.map((entry, idx) => (
+                  <Cell key={`cell-${idx}`} fill={colors[idx % colors.length]} />
+                ))}
+              </Pie>
+            </RePieChart>
+          )}
+        </ResponsiveContainer>
       </div>
     );
   };
